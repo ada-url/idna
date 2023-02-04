@@ -40,7 +40,8 @@ static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
 }
 
 bool punycode_to_utf32(std::string_view input, std::u32string &out) {
-  out.reserve(input.size());
+  size_t written_out{0};
+  out.reserve(out.size() + input.size());
   uint32_t n = initial_n;
   int32_t i = 0;
   int32_t bias = initial_bias;
@@ -52,6 +53,7 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
         return false;
       }
       out.push_back(c);
+      written_out++;
     }
     input.remove_prefix(end_of_ascii + 1);
   }
@@ -81,17 +83,76 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
       }
       w = w * (base - t);
     }
-    bias = adapt(i - oldi, out.size() + 1, oldi == 0);
-    if (i / (out.size() + 1) > 0x7fffffff - n) {
+    bias = adapt(i - oldi, written_out + 1, oldi == 0);
+    if (i / (written_out + 1) > 0x7fffffff - n) {
       return false;
     }
-    n = n + i / (out.size() + 1);
-    i = i % (out.size() + 1);
+    n = n + i / (written_out + 1);
+    i = i % (written_out + 1);
     if (n < 0x80) {
       return false;
     }
-    // insert n into output at position i
     out.insert(out.begin() + i, n);
+    written_out++;
+    ++i;
+  }
+
+  return true;
+}
+
+
+bool verify_punycode(std::string_view input) {
+  size_t written_out{0};
+  uint32_t n = initial_n;
+  int32_t i = 0;
+  int32_t bias = initial_bias;
+  // grab ascii content
+  size_t end_of_ascii = input.find_last_of('-');
+  if (end_of_ascii != std::string_view::npos) {
+    for (uint8_t c : input.substr(0, end_of_ascii)) {
+      if (c >= 0x80) {
+        return false;
+      }
+      written_out++;
+    }
+    input.remove_prefix(end_of_ascii + 1);
+  }
+  while (!input.empty()) {
+    int32_t oldi = i;
+    int32_t w = 1;
+    for (int32_t k = base;; k += base) {
+      if (input.empty()) {
+        return false;
+      }
+      uint8_t code_point = input.front();
+      input.remove_prefix(1);
+      int32_t digit = char_to_digit_value(code_point);
+      if (digit < 0) {
+        return false;
+      }
+      if (digit > (0x7fffffff - i) / w) {
+        return false;
+      }
+      i = i + digit * w;
+      int32_t t = k <= bias ? tmin : k >= bias + tmax ? tmax : k - bias;
+      if (digit < t) {
+        break;
+      }
+      if (w > 0x7fffffff / (base - t)) {
+        return false;
+      }
+      w = w * (base - t);
+    }
+    bias = adapt(i - oldi, written_out + 1, oldi == 0);
+    if (i / (written_out + 1) > 0x7fffffff - n) {
+      return false;
+    }
+    n = n + i / (written_out + 1);
+    i = i % (written_out + 1);
+    if (n < 0x80) {
+      return false;
+    }
+    written_out++;
     ++i;
   }
 
@@ -99,6 +160,7 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
 }
 
 bool utf32_to_punycode(std::u32string_view input, std::string &out) {
+  out.reserve(input.size() + out.size());
   uint32_t n = initial_n;
   int32_t d = 0;
   int32_t bias = initial_bias;

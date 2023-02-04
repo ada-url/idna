@@ -1,3 +1,4 @@
+#include "ada/idna/to_ascii.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
 

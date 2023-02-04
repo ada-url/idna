@@ -1,6 +1,6 @@
 
 #include "ada/idna/unicode_transcoding.h"
-
+#include <cstring>
 namespace ada::idna {
 
 size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
@@ -11,9 +11,9 @@ size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
     // try to convert the next block of 16 ASCII bytes
     if (pos + 16 <= len) { // if it is safe to read 16 more bytes, check that they are ascii
       uint64_t v1;
-      ::memcpy(&v1, data + pos, sizeof(uint64_t));
+      std::memcpy(&v1, data + pos, sizeof(uint64_t));
       uint64_t v2;
-      ::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
       uint64_t v{v1 | v2};
       if ((v & 0x8080808080808080) == 0) {
         size_t final_pos = pos + 16;
@@ -110,7 +110,7 @@ size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {
     // try to convert the next block of 2 ASCII characters
     if (pos + 2 <= len) { // if it is safe to read 8 more bytes, check that they are ascii
       uint64_t v;
-      ::memcpy(&v, data + pos, sizeof(uint64_t));
+      std::memcpy(&v, data + pos, sizeof(uint64_t));
       if ((v & 0xFFFFFF80FFFFFF80) == 0) {
         *utf8_output++ = char(buf[pos]);
 				*utf8_output++ = char(buf[pos+1]);

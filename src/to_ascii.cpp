@@ -27,11 +27,22 @@ std::string to_ascii(std::string_view ut8_string) {
   // check.
   ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
 
-  // Here we would do extra work such as mapping and so forth. We do not have to
-  // do it yet.
-
+  // Here we would do extra work such as mapping and so forth. Here is what we need to do:
+  //
+  //  * [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap). For each code point in the domain_name string, look up the status value in Section 5, [IDNA Mapping Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table), and take the following actions:
+  //    * disallowed: Leave the code point unchanged in the string, and record that there was an error.
+  //    * ignored: Remove the code point from the string. This is equivalent to mapping the code point to an empty string.
+  //    * mapped: Replace the code point in the string by the value for the mapping in Section 5, [IDNA Mapping Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
+  //    * valid: Leave the code point unchanged in the string.
+  //  * [Normalize](https://www.unicode.org/reports/tr46/#ProcessingStepNormalize). Normalize 
+  //     the domain_name string to Unicode Normalization Form C. See https://dev.w3.org/cvsweb/charlint/charlint.pl?rev=1.28;content-type=text%2Fplain for a Perl script that does it.
+  ////////////////////////////////////////////////////
+  // TODO: Implement mapping *and* normalization.
+  ////////////////////////////////////////////////////
   std::string out;
   size_t label_start = 0;
+  //  * [Break](https://www.unicode.org/reports/tr46/#ProcessingStepBreak). Break the string into labels at U+002E ( . ) FULL STOP.
+
   while (label_start != utf32.size()) {
     size_t loc_dot = utf32.find('.', label_start);
     bool is_last_label = (loc_dot == std::string_view::npos);
@@ -40,14 +51,19 @@ std::string to_ascii(std::string_view ut8_string) {
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
     std::u32string_view label_view(utf32.data() + label_start, label_size);
     label_start += label_size_with_dot;
+
     if (label_size == 0) {
       // empty label? Nothing to do.
     } else if (begins_with(label_view, U"xn--") ||
                begins_with(label_view, U"XN--") ||
                begins_with(label_view, U"Xn--") ||
                begins_with(label_view, U"xN--")) {
-
-      // hopefully, this will do UTF-32 to ASCII conversion.
+      //    * [If the label starts with “xn--”](https://www.unicode.org/reports/tr46/#ProcessingStepPunycode):
+      //      * Attempt to convert the rest of the label to Unicode according to Punycode [[RFC3492 (https://www.unicode.org/reports/tr46/#RFC3492)]. If that conversion fails, record that there was an error, and continue with the next label. Otherwise replace the original label in the string by the results of the conversion.
+      //      * Verify that the label meets the validity criteria in Section 4.1, [Validity Criteria](https://www.unicode.org/reports/tr46/#Validity_Criteria) for Nontransitional Processing. If any of the validity criteria are not satisfied, record that there was an error.
+      ////////////////////////////////////////////////////
+      // TODO: current code merely verifies that we have proper punycode. But we should decode and verify the cotent.
+      ////////////////////////////////////////////////////
       for (char32_t c : label_view) {
         if (c >= 0x80) {
           return error;
@@ -60,7 +76,11 @@ std::string to_ascii(std::string_view ut8_string) {
         return error;
       }
     } else {
-      // convert the label to punycode and write it out
+      //    * [If the label does not start with “xn--”](https://www.unicode.org/reports/tr46/#ProcessingStepNonPunycode):
+      //  Verify that the label meets the validity criteria in Section 4.1, [Validity Criteria](https://www.unicode.org/reports/tr46/#Validity_Criteria) for the input Processing choice (Transitional or Nontransitional). If any of the validity criteria are not satisfied, record that there was an error.
+      ////////////////////////////////////////////////////
+      // TODO: current code merely encodes to punycode but we should also check the validity criteria.
+      ////////////////////////////////////////////////////
       ada::idna::utf32_to_punycode(label_view, out);
     }
     if (!is_last_label) {

@@ -3,7 +3,7 @@ repos:
     hooks:
     -   id: clang-format
         name: clang-format
-        entry: clang-format -i
+        entry: ./hooks/clang-format-hook
         types_or: [c++, c]
         language: system
 

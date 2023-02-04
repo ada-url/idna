@@ -15,10 +15,16 @@ bool begins_with(std::u32string_view view, std::u32string_view prefix) {
 
 // We return "" on error. For now.
 std::string to_ascii(std::string_view ut8_string) {
+  // If the string is pure ascii, then **we do not need** to convert to UTF-32 and could
+  // use a faster path where we only do verify_punycode where needed. Though we may need
+  // to do mapping and check for forbidden characters.
+  static const std::string error = "";
   // We convert to UTF-32
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   std::u32string utf32(utf32_length, '\0');
+  // To do: utf8_to_utf32 will return zero if the input is invalid UTF-8, we should
+  // check.
   ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
 
   // Here we would do extra work such as mapping and so forth. We do not have to
@@ -44,14 +50,14 @@ std::string to_ascii(std::string_view ut8_string) {
       // hopefully, this will do UTF-32 to ASCII conversion.
       for (char32_t c : label_view) {
         if (c >= 0x80) {
-          return "";
+          return error;
         }
         out += (unsigned char)(c);
       }
       std::string_view puny_segment_ascii(out.data() - label_view.size() + 4,
                                           label_view.size() - 4);
       if (!ada::idna::verify_punycode(puny_segment_ascii)) {
-        return "";
+        return error;
       }
     } else {
       // convert the label to punycode and write it out

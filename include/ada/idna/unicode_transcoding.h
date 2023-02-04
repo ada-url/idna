@@ -14,6 +14,6 @@ size_t utf32_length_from_utf8(const char* buf, size_t len);
 
 size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output);
 
-}
+}  // namespace ada::idna
 
-#endif // ADA_IDNA_UNICODE_TRANSCODING_H
+#endif  // ADA_IDNA_UNICODE_TRANSCODING_H

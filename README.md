@@ -1,8 +1,8 @@
 # IDNA
 
-### Setup
+### Commit setup
 #### Git hooks
-1. Install [pre-commit](https://pre-commit.com/) (a framework to manage pre-commit hooks)
+1. Install [pre-commit](https://pre-commit.com/)
 Using [pip](https://www.w3schools.com/python/python_pip.asp):
 ```bash
 pip install pre-commit

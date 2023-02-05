@@ -1,7 +1,7 @@
 # IDNA
 
-### Commit setup
-#### Git hooks
+#### Commit setup
+##### Git hooks
 1. Install [pre-commit](https://pre-commit.com/)
 Using [pip](https://www.w3schools.com/python/python_pip.asp):
 ```bash

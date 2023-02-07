@@ -28,6 +28,20 @@ uint32_t find_range_index(uint32_t key) {
 
 // Map the characters according to IDNA, returning the empty string on error.
 std::u32string map(std::u32string_view input) {
+    //
+    //  * [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap).
+    //  For each code point in the domain_name string, look up the status
+    //  value in Section 5, [IDNA Mapping
+    //  Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table),
+    //  and take the following actions:
+    //    * disallowed: Leave the code point unchanged in the string, and
+    //    record that there was an error.
+    //    * ignored: Remove the code point from the string. This is
+    //    equivalent to mapping the code point to an empty string.
+    //    * mapped: Replace the code point in the string by the value for
+    //    the mapping in Section 5, [IDNA Mapping
+    //    Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
+    //    * valid: Leave the code point unchanged in the string.
     static std::u32string error = U"";
     std::u32string answer;
     answer.reserve(input.size());

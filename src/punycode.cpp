@@ -13,15 +13,13 @@ constexpr int32_t initial_bias = 72;
 constexpr uint32_t initial_n = 128;
 
 static constexpr int32_t char_to_digit_value(char value) {
-  if (value >= 'a' && value <= 'z')
-    return value - 'a';
-  if (value >= '0' && value <= '9')
-    return value - '0' + 26;
+  if (value >= 'a' && value <= 'z') return value - 'a';
+  if (value >= '0' && value <= '9') return value - '0' + 26;
   return -1;
 }
 
 static constexpr char digit_to_char(int32_t digit) {
-    return digit < 26 ? digit + 97 : digit + 22;
+  return digit < 26 ? digit + 97 : digit + 22;
 }
 
 static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
@@ -99,7 +97,6 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
 
   return true;
 }
-
 
 bool verify_punycode(std::string_view input) {
   size_t written_out{0};
@@ -182,8 +179,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
   while (h < input.size()) {
     uint32_t m = 0x10FFFF;
     for (auto code_point : input) {
-      if (code_point >= n && code_point < m)
-        m = code_point;
+      if (code_point >= n && code_point < m) m = code_point;
     }
 
     if ((m - n) > (0x7fffffff - d) / (h + 1)) {
@@ -221,4 +217,4 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
   return true;
 }
 
-} // namespace ada::idna
+}  // namespace ada::idna

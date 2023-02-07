@@ -1,6 +1,7 @@
 #include "ada/idna/to_ascii.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
+#include "ada/idna/mapping.h"
 
 #include <cstdint>
 
@@ -26,18 +27,17 @@ std::string to_ascii(std::string_view ut8_string) {
   // To do: utf8_to_utf32 will return zero if the input is invalid UTF-8, we should
   // check.
   ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
-
-  // Here we would do extra work such as mapping and so forth. Here is what we need to do:
   //
   //  * [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap). For each code point in the domain_name string, look up the status value in Section 5, [IDNA Mapping Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table), and take the following actions:
   //    * disallowed: Leave the code point unchanged in the string, and record that there was an error.
   //    * ignored: Remove the code point from the string. This is equivalent to mapping the code point to an empty string.
   //    * mapped: Replace the code point in the string by the value for the mapping in Section 5, [IDNA Mapping Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
   //    * valid: Leave the code point unchanged in the string.
+  utf32 = ada::idna::map(utf32);
   //  * [Normalize](https://www.unicode.org/reports/tr46/#ProcessingStepNormalize). Normalize 
   //     the domain_name string to Unicode Normalization Form C. See https://dev.w3.org/cvsweb/charlint/charlint.pl?rev=1.28;content-type=text%2Fplain for a Perl script that does it.
   ////////////////////////////////////////////////////
-  // TODO: Implement mapping *and* normalization.
+  // TODO: Implementnormalization.
   ////////////////////////////////////////////////////
   std::string out;
   size_t label_start = 0;

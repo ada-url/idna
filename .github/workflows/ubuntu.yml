@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Prepare
-        run: cmake -DBUILD_TESTING=ON  -DBUILD_SHARED_LIBS=${{matrix.shared}} -B build
+        run: cmake -DBUILD_SHARED_LIBS=${{matrix.shared}} -B build
         env:
           CXX: ${{matrix.cxx}}
       - name: Build

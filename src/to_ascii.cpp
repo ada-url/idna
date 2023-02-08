@@ -65,7 +65,8 @@ std::string to_ascii(std::string_view ut8_string) {
       std::string_view puny_segment_ascii(out.data() + out.size() - label_view.size() + 4,
                                           label_view.size() - 4);
       std::u32string tmp_buffer;
-      ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
+      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
+      if(!is_ok) { return error; }
       tmp_buffer = ada::idna::map(tmp_buffer);
       normalize(tmp_buffer);
       if(tmp_buffer.empty()) { return error; }
@@ -76,10 +77,10 @@ std::string to_ascii(std::string_view ut8_string) {
         for (char32_t c : label_view) {
           out += (unsigned char)(c);
         }
-
       } else {
         out.append("xn--");
-        ada::idna::utf32_to_punycode(label_view, out);
+        bool is_ok = ada::idna::utf32_to_punycode(label_view, out);
+        if(!is_ok) { return error; }
 
       }
     }

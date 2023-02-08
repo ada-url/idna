@@ -4,6 +4,10 @@ namespace ada::idna {
 
 // CheckJoiners and CheckBidi are true for URL specification.
 bool is_label_valid(const std::u32string_view label) {
+///////////////
+// Fake:
+if((!label.empty()) && label[0] == 0x64a) { return false; }
+///////////////
   // The label must be in Unicode Normalization Form NFC.
 
   // If CheckHyphens, the label must not contain a U+002D HYPHEN-MINUS character

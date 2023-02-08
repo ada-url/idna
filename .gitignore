@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+.fleet
+build
+.cache

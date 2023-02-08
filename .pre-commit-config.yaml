@@ -6,6 +6,3 @@ repos:
         entry: ./hooks/clang-format-hook
         types_or: [c++, c]
         language: system
-
-
-

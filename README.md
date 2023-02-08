@@ -1,4 +1,11 @@
-# IDNA
+# Unicode IDNA
+
+The ada-url/ada library is a C++ library implementing the `to_array` and `to_unicode` functions from the [Unicode Technical Standard](https://www.unicode.org/reports/tr46/#ToUnicode). It is suitable for URL parsing.
+
+
+## Requirements
+
+- A recent C++ compiler supporting C++17. We test GCC 9 or better, LLVM 10 or better and Microsoft Visual Studio 2022.
 
 ## Contributing
 

@@ -3,11 +3,10 @@
 #include <cstdint>
 
 #include "ada/idna/mapping.h"
+#include "ada/idna/normalization.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
-#include "ada/idna/normalization.h"
 #include "ada/idna/validity.h"
-
 
 namespace ada::idna {
 
@@ -18,9 +17,12 @@ bool begins_with(std::u32string_view view, std::u32string_view prefix) {
   return view.substr(0, prefix.size()) == prefix;
 }
 
-
 bool is_ascii(std::u32string_view view) {
-  for(uint32_t c : view) { if(c>=0x80) { return false; } }
+  for (uint32_t c : view) {
+    if (c >= 0x80) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -35,7 +37,8 @@ std::string to_ascii(std::string_view ut8_string) {
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   std::u32string utf32(utf32_length, '\0');
-  size_t actual_utf32_length = ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
+  size_t actual_utf32_length = ada::idna::utf8_to_utf32(
+      ut8_string.data(), ut8_string.size(), utf32.data());
   // mapping
   utf32 = ada::idna::map(utf32);
   normalize(utf32);
@@ -62,26 +65,36 @@ std::string to_ascii(std::string_view ut8_string) {
         }
         out += (unsigned char)(c);
       }
-      std::string_view puny_segment_ascii(out.data() + out.size() - label_view.size() + 4,
-                                          label_view.size() - 4);
+      std::string_view puny_segment_ascii(
+          out.data() + out.size() - label_view.size() + 4,
+          label_view.size() - 4);
       std::u32string tmp_buffer;
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
-      if(!is_ok) { return error; }
+      if (!is_ok) {
+        return error;
+      }
       tmp_buffer = ada::idna::map(tmp_buffer);
       normalize(tmp_buffer);
-      if(tmp_buffer.empty()) { return error; }
-      if(!is_label_valid(tmp_buffer)) { return error; }
+      if (tmp_buffer.empty()) {
+        return error;
+      }
+      if (!is_label_valid(tmp_buffer)) {
+        return error;
+      }
     } else {
-      if(!is_label_valid(label_view)) { return error; }
-      if(is_ascii(label_view)) {
+      if (!is_label_valid(label_view)) {
+        return error;
+      }
+      if (is_ascii(label_view)) {
         for (char32_t c : label_view) {
           out += (unsigned char)(c);
         }
       } else {
         out.append("xn--");
         bool is_ok = ada::idna::utf32_to_punycode(label_view, out);
-        if(!is_ok) { return error; }
-
+        if (!is_ok) {
+          return error;
+        }
       }
     }
     if (!is_last_label) {

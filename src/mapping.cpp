@@ -65,9 +65,9 @@ std::u32string map(std::u32string_view input) {
         {
           size_t char_count = (descriptor >> 24);
           uint16_t char_index = uint16_t(descriptor >> 8);
-          for (size_t index = char_index; index < char_index + char_count;
-               index++) {
-            answer.push_back(mappings[index]);
+          for (size_t idx = char_index; idx < char_index + char_count;
+               idx++) {
+            answer.push_back(mappings[idx]);
           }
         }
     }

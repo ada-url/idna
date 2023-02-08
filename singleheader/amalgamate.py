@@ -53,7 +53,6 @@ def doinclude(fid, file, line, origin):
     p = os.path.join(AMALGAMATE_INCLUDE_PATH, file)
     pi = os.path.join(AMALGAMATE_SOURCE_PATH, file)
     puni = os.path.join(AMALGAMATE_UNILIB_SOURCE_PATH, file)
-    print("file: ", file)
     if os.path.exists(puni):
         if file not in found_unilib:
             found_unilib.append(file)
@@ -81,7 +80,6 @@ def dofile(fid, prepath, filename):
     print(f"// dofile: invoked with prepath={prepath}, filename={filename}",file=fid)
     file = os.path.join(prepath, filename)
     RELFILE = os.path.relpath(file, PROJECTPATH)
-    print("scanning ", RELFILE)
     # Last lines are always ignored. Files should end by an empty lines.
     print(f"/* begin file {RELFILE} */", file=fid)
     includepattern = re.compile('\s*#\s*include "(.*)"')

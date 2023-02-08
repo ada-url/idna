@@ -22,34 +22,24 @@ if (Python3_Interpreter_FOUND)
       AMALGAMATE_INPUT_PATH=${PROJECT_SOURCE_DIR}/include
       AMALGAMATE_OUTPUT_PATH=${CMAKE_CURRENT_BINARY_DIR}
       ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/amalgamate.py
-      #
-      # This is the best way I could find to make amalgamation trigger whenever source files or
-      # header files change: since the "ada_idna" library has to get rebuilt when that happens, we
-      # take a dependency on the generated library file (even though we're not using it). Depending
-      # on ada_idna-source doesn't do the trick because DEPENDS here can only depend on an
-      # *artifact*--it won't scan source and include files the way a concrete library or executable
-      # will.
-      #
-      # It sucks that we have to build the actual library to make it happen, but it's better than\
-      # nothing!
-      #
-      DEPENDS amalgamate.py ada_idna
+      DEPENDS amalgamate.py
   )
   add_custom_target(singleheader-files DEPENDS ${SINGLEHEADER_FILES})
 
   #
   # Include this if you intend to #include "ada_idna.cpp" in your own .cpp files.
   #
-  add_library(ada_idna-singleheader-include-source INTERFACE)
-  target_include_directories(ada_idna-singleheader-include-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
-  add_dependencies(ada_idna-singleheader-include-source singleheader-files)
+  add_library(ada-idna-singleheader-include-source INTERFACE)
+  target_include_directories(ada-idna-singleheader-include-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+  add_dependencies(ada-idna-singleheader-include-source singleheader-files)
 
-  add_library(ada_idna-singleheader-source INTERFACE)
-  target_sources(ada_idna-singleheader-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/ada_idna.cpp>)
-  target_link_libraries(ada_idna-singleheader-source INTERFACE ada_idna-singleheader-include-source)
+  add_library(ada-idna-singleheader-source INTERFACE)
+  target_sources(ada-idna-singleheader-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/ada_idna.cpp>)
+  target_link_libraries(ada-idna-singleheader-source INTERFACE ada-idna-singleheader-include-source)
   if (BUILD_TESTING)
     add_executable(demo $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/demo.cpp>)
-    target_link_libraries(demo ada_idna-singleheader-include-source)
+    target_link_libraries(demo ada-idna-singleheader-include-source)
+
     add_test(demo demo)
   endif()
 else()

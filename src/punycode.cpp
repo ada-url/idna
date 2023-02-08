@@ -19,7 +19,7 @@ static constexpr int32_t char_to_digit_value(char value) {
 }
 
 static constexpr char digit_to_char(int32_t digit) {
-  return digit < 26 ? digit + 97 : digit + 22;
+  return digit < 26 ? char(digit + 97) : char(digit + 22);
 }
 
 static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
@@ -38,7 +38,7 @@ static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
 }
 
 bool punycode_to_utf32(std::string_view input, std::u32string &out) {
-  size_t written_out{0};
+  int32_t written_out{0};
   out.reserve(out.size() + input.size());
   uint32_t n = initial_n;
   int32_t i = 0;

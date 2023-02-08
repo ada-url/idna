@@ -1,4 +1,3 @@
-
 #ifndef ADA_IDNA_TO_ASCII_H
 #define ADA_IDNA_TO_ASCII_H
 

@@ -6,7 +6,7 @@ namespace ada::idna {
 bool is_label_valid(const std::u32string_view label) {
   ///////////////
   // Fake:
-  if ((!label.empty()) && label[0] == 0x64a) {
+  if ((!label.empty()) &&( label[0] == 0x64a || label[0] == 0x200d || label[label.size() - 1] == 0x30b1) ) {
     return false;
   }
   ///////////////

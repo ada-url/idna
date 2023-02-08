@@ -39,6 +39,7 @@ std::string to_ascii(std::string_view ut8_string) {
   std::u32string utf32(utf32_length, '\0');
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
+  if(actual_utf32_length == 0) { return error; }
   // mapping
   utf32 = ada::idna::map(utf32);
   normalize(utf32);

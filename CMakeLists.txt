@@ -22,3 +22,4 @@ else()
   endif()
 endif(BUILD_TESTING)
 
+add_subdirectory(singleheader)

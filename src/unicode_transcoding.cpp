@@ -1,6 +1,6 @@
 
 #include "ada/idna/unicode_transcoding.h"
-
+#include <cstdint>
 #include <cstring>
 namespace ada::idna {
 

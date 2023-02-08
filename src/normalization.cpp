@@ -1,7 +1,7 @@
 #include "ada/idna/normalization.h"
 
-#include "unilib/uninorms.cpp"
 #include "unilib/uninorms.h"
+#include "unilib/uninorms.cpp"
 namespace ada::idna {
 
 void normalize(std::u32string& input) {

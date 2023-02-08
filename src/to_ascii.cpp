@@ -1,10 +1,8 @@
 #include "ada/idna/to_ascii.h"
-#include "ada/idna/punycode.h"
-#include "ada/idna/unicode_transcoding.h"
-#include "ada/idna/mapping.h"
 
 #include <cstdint>
 
+#include "ada/idna/mapping.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
 
@@ -38,7 +36,7 @@ std::string to_ascii(std::string_view ut8_string) {
   //     https://dev.w3.org/cvsweb/charlint/charlint.pl?rev=1.28;content-type=text%2Fplain
   //     for a Perl script that does it.
   ////////////////////////////////////////////////////
-  // TODO: Implementnormalization.
+  // TODO: Implement normalization.
   ////////////////////////////////////////////////////
   std::string out;
   size_t label_start = 0;

@@ -50,7 +50,6 @@ std::string to_ascii(std::string_view ut8_string) {
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
     std::u32string_view label_view(utf32.data() + label_start, label_size);
     label_start += label_size_with_dot;
-
     if (label_size == 0) {
       // empty label? Nothing to do.
     } else if (begins_with(label_view, U"xn--") ||
@@ -63,13 +62,13 @@ std::string to_ascii(std::string_view ut8_string) {
         }
         out += (unsigned char)(c);
       }
-      std::string_view puny_segment_ascii(out.data() - label_view.size() + 4,
+      std::string_view puny_segment_ascii(out.data() + out.size() - label_view.size() + 4,
                                           label_view.size() - 4);
       std::u32string tmp_buffer;
       ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       tmp_buffer = ada::idna::map(tmp_buffer);
       normalize(tmp_buffer);
-      if(tmp_buffer != label_view) { return error; }
+      if(tmp_buffer.empty()) { return error; }
       if(!is_label_valid(tmp_buffer)) { return error; }
     } else {
       if(!is_label_valid(label_view)) { return error; }
@@ -77,9 +76,11 @@ std::string to_ascii(std::string_view ut8_string) {
         for (char32_t c : label_view) {
           out += (unsigned char)(c);
         }
+
       } else {
         out.append("xn--");
         ada::idna::utf32_to_punycode(label_view, out);
+
       }
     }
     if (!is_last_label) {

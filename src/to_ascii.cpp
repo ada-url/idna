@@ -5,6 +5,9 @@
 #include "ada/idna/mapping.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
+#include "ada/idna/normalization.h"
+#include "ada/idna/validity.h"
+
 
 namespace ada::idna {
 
@@ -13,6 +16,12 @@ bool begins_with(std::u32string_view view, std::u32string_view prefix) {
     return false;
   }
   return view.substr(0, prefix.size()) == prefix;
+}
+
+
+bool is_ascii(std::u32string_view view) {
+  for(uint32_t c : view) { if(c>=0x80) { return false; } }
+  return true;
 }
 
 // We return "" on error. For now.
@@ -26,22 +35,12 @@ std::string to_ascii(std::string_view ut8_string) {
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   std::u32string utf32(utf32_length, '\0');
-  // To do: utf8_to_utf32 will return zero if the input is invalid
-  // UTF-8, we should check.
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
   // mapping
   utf32 = ada::idna::map(utf32);
-  //  * [Normalize](https://www.unicode.org/reports/tr46/#ProcessingStepNormalize). Normalize
-  //     the domain_name string to Unicode Normalization Form C. See
-  //     https://dev.w3.org/cvsweb/charlint/charlint.pl?rev=1.28;content-type=text%2Fplain
-  //     for a Perl script that does it.
-  ////////////////////////////////////////////////////
-  // TODO: Implement normalization.
-  ////////////////////////////////////////////////////
+  normalize(utf32);
   std::string out;
   size_t label_start = 0;
-  //  * [Break](https://www.unicode.org/reports/tr46/#ProcessingStepBreak).
-  //  Break the string into labels at U+002E ( . ) FULL STOP.
 
   while (label_start != utf32.size()) {
     size_t loc_dot = utf32.find('.', label_start);
@@ -58,27 +57,6 @@ std::string to_ascii(std::string_view ut8_string) {
                begins_with(label_view, U"XN--") ||
                begins_with(label_view, U"Xn--") ||
                begins_with(label_view, U"xN--")) {
-      //    * [If the label starts with
-      //    “xn--”](https://www.unicode.org/reports/tr46/#ProcessingStepPunycode):
-      //      * Attempt to convert the rest of the label
-      //      to Unicode according to Punycode [[RFC3492
-      //      (https://www.unicode.org/reports/tr46/#RFC3492)].
-      //      If that conversion fails, record that
-      //      there was an error, and continue with the
-      //      next label. Otherwise replace the original
-      //      label in the string by the results of the
-      //      conversion.
-      //      * Verify that the label meets the validity
-      //      criteria in Section 4.1, [Validity
-      //      Criteria](https://www.unicode.org/reports/tr46/#Validity_Criteria)
-      //      for Nontransitional Processing. If any of
-      //      the validity criteria are not satisfied,
-      //      record that there was an error.
-      ////////////////////////////////////////////////////
-      // TODO: current code merely verifies that we have
-      // proper punycode. But we should decode and
-      // verify the cotent.
-      ////////////////////////////////////////////////////
       for (char32_t c : label_view) {
         if (c >= 0x80) {
           return error;
@@ -87,24 +65,22 @@ std::string to_ascii(std::string_view ut8_string) {
       }
       std::string_view puny_segment_ascii(out.data() - label_view.size() + 4,
                                           label_view.size() - 4);
-      if (!ada::idna::verify_punycode(puny_segment_ascii)) {
-        return error;
-      }
+      std::u32string tmp_buffer;
+      ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
+      tmp_buffer = ada::idna::map(tmp_buffer);
+      normalize(tmp_buffer);
+      if(tmp_buffer != label_view) { return error; }
+      if(!is_label_valid(tmp_buffer)) { return error; }
     } else {
-      //    * [If the label does not start with
-      //    “xn--”](https://www.unicode.org/reports/tr46/#ProcessingStepNonPunycode):
-      //  Verify that the label meets the validity
-      //  criteria in Section 4.1, [Validity
-      //  Criteria](https://www.unicode.org/reports/tr46/#Validity_Criteria)
-      //  for the input Processing choice (Transitional
-      //  or Nontransitional). If any of the validity
-      //  criteria are not satisfied, record that there
-      //  was an error.
-      ////////////////////////////////////////////////////
-      // TODO: current code merely encodes to punycode
-      // but we should also check the validity criteria.
-      ////////////////////////////////////////////////////
-      ada::idna::utf32_to_punycode(label_view, out);
+      if(!is_label_valid(label_view)) { return error; }
+      if(is_ascii(label_view)) {
+        for (char32_t c : label_view) {
+          out += (unsigned char)(c);
+        }
+      } else {
+        out.append("xn--");
+        ada::idna::utf32_to_punycode(label_view, out);
+      }
     }
     if (!is_last_label) {
       out.push_back('.');

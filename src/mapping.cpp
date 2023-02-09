@@ -1,6 +1,7 @@
 #include "ada/idna/mapping.h"
 
 #include <array>
+#include <string>
 
 #include "mapping_tables.cpp"
 

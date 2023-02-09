@@ -1160,7 +1160,7 @@ bool is_label_valid(const std::u32string_view label) {
           return true;
         }
       }
-      if ((i == 0) || (i == label.size() - 1)) {
+      if ((i == 0) || (i + 1 >= label.size())) {
         return false;
       }
       // we go backward looking for L or D

@@ -74,12 +74,15 @@ std::string to_ascii(std::string_view ut8_string) {
       if (!is_ok) {
         return error;
       }
-      tmp_buffer = ada::idna::map(tmp_buffer);
-      normalize(tmp_buffer);
-      if (tmp_buffer.empty()) {
+      std::u32string post_map = ada::idna::map(tmp_buffer);
+      if(tmp_buffer != post_map) { return error; }
+      std::u32string pre_normal = post_map;
+      normalize(post_map);
+      if(post_map != pre_normal) { return error; }
+      if (post_map.empty()) {
         return error;
       }
-      if (!is_label_valid(tmp_buffer)) {
+      if (!is_label_valid(post_map)) {
         return error;
       }
     } else {

@@ -34,7 +34,7 @@ enum direction {
 struct directions {
   uint32_t start_code;
   uint32_t final_code;
-  direction direction;
+  direction direct;
 };
 
 static directions dir_table[] = {
@@ -1229,7 +1229,7 @@ bool is_label_valid(const std::u32string_view label) {
         return direction::NONE;
       }
       if ((code >= d.start_code) && (code <= d.final_code)) {
-        return d.direction;
+        return d.direct;
       }
 
     }

@@ -82,7 +82,7 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
       w = w * (base - t);
     }
     bias = adapt(i - oldi, written_out + 1, oldi == 0);
-    if (i / (written_out + 1) > 0x7fffffff - n) {
+    if (i / (written_out + 1) > int32_t(0x7fffffff - n)) {
       return false;
     }
     n = n + i / (written_out + 1);
@@ -140,12 +140,12 @@ bool verify_punycode(std::string_view input) {
       }
       w = w * (base - t);
     }
-    bias = adapt(i - oldi, written_out + 1, oldi == 0);
+    bias = adapt(i - oldi, int32_t(written_out + 1), oldi == 0);
     if (i / (written_out + 1) > 0x7fffffff - n) {
       return false;
     }
-    n = n + i / (written_out + 1);
-    i = i % (written_out + 1);
+    n = n + i / int32_t(written_out + 1);
+    i = i % int32_t(written_out + 1);
     if (n < 0x80) {
       return false;
     }
@@ -166,7 +166,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
   for (uint32_t c : input) {
     if (c < 0x80) {
       ++h;
-      out.push_back(c);
+      out.push_back(char(c));
     }
     if (c > 0x10ffff || (c >= 0xd880 && c < 0xe000)) {
       return false;
@@ -185,7 +185,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
     if ((m - n) > (0x7fffffff - d) / (h + 1)) {
       return false;
     }
-    d = d + (m - n) * (h + 1);
+    d = d + int32_t((m - n) * (h + 1));
     n = m;
     for (auto c : input) {
       if (c < n) {
@@ -206,7 +206,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
           q = (q - t) / (base - t);
         }
         out.push_back(digit_to_char(q));
-        bias = adapt(d, h + 1, h == b);
+        bias = adapt(d, int32_t(h + 1), h == b);
         d = 0;
         ++h;
       }

@@ -1259,7 +1259,7 @@ bool is_label_valid(const std::u32string_view label) {
         } else if (d == direction::NSM) {
           ve = false;
         }
-        if (d == direction::AN || direction::EN) {
+        if (d == direction::AN || d == direction::EN) {
           if (nt == direction::NONE) {
             nt = d;
           } else if (nt != d) {

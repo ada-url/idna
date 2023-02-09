@@ -1176,8 +1176,8 @@ bool is_label_valid(const std::u32string_view label) {
       std::u32string_view after = label.substr(i + 1);
       return (std::find_if(before.begin(), before.end(), is_l_or_d) !=
               before.end()) &&
-             (std::find_if(after.begin(), before.end(), is_r_or_d) !=
-              before.end());
+             (std::find_if(after.begin(), after.end(), is_r_or_d) !=
+              after.end());
     } else if (c == 0x200d) {
       if (i > 0) {
         if (std::find(std::begin(virama), std::end(virama), label[i - 1]) !=

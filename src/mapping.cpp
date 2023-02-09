@@ -10,6 +10,10 @@ namespace ada::idna {
 // This can be greatly accelerated. For now we just use a simply
 // binary search. In practice, you should *not* do that.
 uint32_t find_range_index(uint32_t key) {
+  ////////////////
+  // This could be implemented with std::lower_bound, but we roll our own
+  // because we want to allow further optimizations in the future.
+  ////////////////
   uint32_t len = std::size(table);
   uint32_t low = 0;
   uint32_t high = len - 1;

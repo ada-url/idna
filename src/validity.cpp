@@ -4,7 +4,7 @@
 
 namespace ada::idna {
 
-enum direction {
+enum direction : uint8_t {
   NONE,
   BN,
   CS,
@@ -782,11 +782,11 @@ bool is_label_valid(const std::u32string_view label) {
   // in both the third and fourth positions. If CheckHyphens, the label must
   // neither begin nor end with a U+002D HYPHEN-MINUS character.
 
-  // This might not be necessary because we segment the
-  // labels.
+  // This is not necessary because we segment the
+  // labels by '.'.
   // ---------------------------------------
   // The label must not contain a U+002E ( . ) FULL STOP.
-  if (label.find('.') != std::string_view::npos) return false;
+  // if (label.find('.') != std::string_view::npos) return false;
 
   // The label must not begin with a combining mark, that is:
   // General_Category=Mark.
@@ -1078,8 +1078,7 @@ bool is_label_valid(const std::u32string_view label) {
       0xe01d9, 0xe01da, 0xe01db, 0xe01dc, 0xe01dd, 0xe01de, 0xe01df, 0xe01e0,
       0xe01e1, 0xe01e2, 0xe01e3, 0xe01e4, 0xe01e5, 0xe01e6, 0xe01e7, 0xe01e8,
       0xe01e9, 0xe01ea, 0xe01eb, 0xe01ec, 0xe01ed, 0xe01ee, 0xe01ef};
-  if (std::find(std::begin(combining), std::end(combining), label.front()) !=
-      std::end(combining)) {
+  if (std::binary_search(std::begin(combining), std::end(combining), label.front())) {
     return false;
   }
   // We verify this next step as part of the mapping:
@@ -1155,8 +1154,7 @@ bool is_label_valid(const std::u32string_view label) {
     uint32_t c = label[i];
     if (c == 0x200c) {
       if (i > 0) {
-        if (std::find(std::begin(virama), std::end(virama), label[i - 1]) !=
-            std::end(virama)) {
+        if (std::binary_search(std::begin(virama), std::end(virama), label[i - 1])) {
           return true;
         }
       }
@@ -1165,12 +1163,12 @@ bool is_label_valid(const std::u32string_view label) {
       }
       // we go backward looking for L or D
       auto is_l_or_d = [](uint32_t code) {
-        return (std::find(std::begin(L), std::end(L), code) != std::end(L)) ||
-               (std::find(std::begin(D), std::end(D), code) != std::end(D));
+        return std::binary_search(std::begin(L), std::end(L), code) ||
+               std::binary_search(std::begin(D), std::end(D), code);
       };
       auto is_r_or_d = [](uint32_t code) {
-        return (std::find(std::begin(R), std::end(R), code) != std::end(R)) ||
-               (std::find(std::begin(D), std::end(D), code) != std::end(D));
+        return std::binary_search(std::begin(R), std::end(R), code) ||
+               std::binary_search(std::begin(D), std::end(D), code);
       };
       std::u32string_view before = label.substr(0, i);
       std::u32string_view after = label.substr(i + 1);
@@ -1180,8 +1178,7 @@ bool is_label_valid(const std::u32string_view label) {
               after.end());
     } else if (c == 0x200d) {
       if (i > 0) {
-        if (std::find(std::begin(virama), std::end(virama), label[i - 1]) !=
-            std::end(virama)) {
+        if (std::binary_search(std::begin(virama), std::end(virama), label[i - 1])) {
           return true;
         }
       }
@@ -1223,16 +1220,12 @@ bool is_label_valid(const std::u32string_view label) {
 
 
   auto find_direction = [](uint32_t code) -> direction {
-    for (auto i = std::begin(dir_table); i != std::end(dir_table); i++) {
-      const directions& d = *i;
-      if (code < d.final_code) {
-        return direction::NONE;
-      }
-      if ((code >= d.start_code) && (code <= d.final_code)) {
-        return d.direct;
-      }
-
-    }
+    auto it = std::lower_bound(std::begin(dir_table), std::end(dir_table), code, 
+    [](const directions& d, uint32_t c) { return d.final_code < c; });
+    // next check is almost surely in vain, but we use it for safety.
+    if(it == std::end(dir_table)) { return direction::NONE; }
+    // We have that d.final_code >= c.
+    if (code >= it->start_code) { return it->direct; }
     return direction::NONE;
   };
   bool have_bidi = false;

@@ -27,9 +27,9 @@ std::string read_file(std::string filename) {
   auto out = std::string();
   auto buf = std::string(read_size, '\0');
   while (stream.read(&buf[0], read_size)) {
-    out.append(buf, 0, stream.gcount());
+    out.append(buf, 0, size_t(stream.gcount()));
   }
-  out.append(buf, 0, stream.gcount());
+  out.append(buf, 0, size_t(stream.gcount()));
   return out;
 }
 

@@ -5,6 +5,8 @@
 
 The ada-url/ada library is a C++ library implementing the `to_array` and `to_unicode` functions from the [Unicode Technical Standard](https://www.unicode.org/reports/tr46/#ToUnicode) supporting a wide range of systems. It is suitable for URL parsing.
 
+According to our benchmarks, it can be faster than ICU.
+
 ## Requirements
 
 - A recent C++ compiler supporting C++17. We test GCC 9 or better, LLVM 10 or better and Microsoft Visual Studio 2022.

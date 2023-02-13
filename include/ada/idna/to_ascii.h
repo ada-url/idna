@@ -12,6 +12,16 @@ namespace ada::idna {
 // this function. We also do not trim control characters. We also assume that
 // the input is not empty. We return "" on error. For now.
 std::string to_ascii(std::string_view ut8_string);
+
+bool constexpr begins_with(std::u32string_view view,
+                           std::u32string_view prefix);
+bool constexpr begins_with(std::string_view view, std::string_view prefix);
+
+bool constexpr is_ascii(std::u32string_view view);
+bool constexpr is_ascii(std::string_view view);
+
+static std::string from_ascii_to_ascii(std::string_view ut8_string);
+
 }  // namespace ada::idna
 
 #endif  // ADA_IDNA_TO_ASCII_H

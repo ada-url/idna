@@ -10,21 +10,22 @@
 
 namespace ada::idna {
 
-bool begins_with(std::u32string_view view, std::u32string_view prefix) {
+bool constexpr begins_with(std::u32string_view view,
+                           std::u32string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
   return view.substr(0, prefix.size()) == prefix;
 }
 
-bool begins_with(std::string_view view, std::string_view prefix) {
+bool constexpr begins_with(std::string_view view, std::string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
   return view.substr(0, prefix.size()) == prefix;
 }
 
-bool is_ascii(std::u32string_view view) {
+bool constexpr is_ascii(std::u32string_view view) {
   for (uint32_t c : view) {
     if (c >= 0x80) {
       return false;
@@ -33,7 +34,7 @@ bool is_ascii(std::u32string_view view) {
   return true;
 }
 
-bool is_ascii(std::string_view view) {
+bool constexpr is_ascii(std::string_view view) {
   for (uint8_t c : view) {
     if (c >= 0x80) {
       return false;
@@ -55,8 +56,8 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   while (label_start != mapped_string.size()) {
     size_t loc_dot = mapped_string.find('.', label_start);
     bool is_last_label = (loc_dot == std::string_view::npos);
-    size_t label_size =
-        is_last_label ? mapped_string.size() - label_start : loc_dot - label_start;
+    size_t label_size = is_last_label ? mapped_string.size() - label_start
+                                      : loc_dot - label_start;
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
     std::string_view label_view(mapped_string.data() + label_start, label_size);
     label_start += label_size_with_dot;
@@ -74,10 +75,14 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
         return error;
       }
       std::u32string post_map = ada::idna::map(tmp_buffer);
-      if(tmp_buffer != post_map) { return error; }
+      if (tmp_buffer != post_map) {
+        return error;
+      }
       std::u32string pre_normal = post_map;
       normalize(post_map);
-      if(post_map != pre_normal) { return error; }
+      if (post_map != pre_normal) {
+        return error;
+      }
       if (post_map.empty()) {
         return error;
       }
@@ -96,7 +101,9 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
 
 // We return "" on error. For now.
 std::string to_ascii(std::string_view ut8_string) {
-  if(is_ascii(ut8_string)) { return from_ascii_to_ascii(ut8_string); }
+  if (is_ascii(ut8_string)) {
+    return from_ascii_to_ascii(ut8_string);
+  }
   static const std::string error = "";
   // We convert to UTF-32
   size_t utf32_length =
@@ -104,7 +111,9 @@ std::string to_ascii(std::string_view ut8_string) {
   std::u32string utf32(utf32_length, '\0');
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
-  if(actual_utf32_length == 0) { return error; }
+  if (actual_utf32_length == 0) {
+    return error;
+  }
   // mapping
   utf32 = ada::idna::map(utf32);
   normalize(utf32);
@@ -138,10 +147,14 @@ std::string to_ascii(std::string_view ut8_string) {
         return error;
       }
       std::u32string post_map = ada::idna::map(tmp_buffer);
-      if(tmp_buffer != post_map) { return error; }
+      if (tmp_buffer != post_map) {
+        return error;
+      }
       std::u32string pre_normal = post_map;
       normalize(post_map);
-      if(post_map != pre_normal) { return error; }
+      if (post_map != pre_normal) {
+        return error;
+      }
       if (post_map.empty()) {
         return error;
       }

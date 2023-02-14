@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  filename = "to_ascii_invalid.txt";
+  filename = "fixtures/to_ascii_invalid.txt";
   if (argc > 2) {
     filename = argv[2];
   }

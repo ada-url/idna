@@ -55,14 +55,20 @@ bool test(std::string ut8_string, std::string puny_string) {
 }
 
 bool special_cases() {
-  if(!ada::idna::to_ascii("\u00AD").empty()) { return false; }
-  if(!ada::idna::to_ascii("\xef\xbf\xbd.com").empty()) { return false; }
+  if (!ada::idna::to_ascii("\u00AD").empty()) {
+    return false;
+  }
+  if (!ada::idna::to_ascii("\xef\xbf\xbd.com").empty()) {
+    return false;
+  }
   return true;
 }
 
 int main(int argc, char** argv) {
-  if(!special_cases()) { return EXIT_FAILURE; }
-  std::string filename = "to_ascii_alternating.txt";
+  if (!special_cases()) {
+    return EXIT_FAILURE;
+  }
+  std::string filename = "fixtures/to_ascii_alternating.txt";
   if (argc > 1) {
     filename = argv[1];
   }

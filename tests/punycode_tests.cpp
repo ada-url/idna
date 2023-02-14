@@ -91,7 +91,7 @@ bool test(std::string ut8_string, std::string puny_string) {
 }
 
 int main(int argc, char** argv) {
-  std::string filename = "utf8_punycode_alternating.txt";
+  std::string filename = "fixtures/utf8_punycode_alternating.txt";
   if (argc > 1) {
     filename = argv[1];
   }

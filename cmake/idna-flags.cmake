@@ -1,0 +1,26 @@
+
+option(ADA_SANITIZE "Sanitize addresses" OFF)
+option(ADA_SANITIZE_UNDEFINED "Sanitize undefined behaviour" OFF)
+if(ADA_SANITIZE)
+  message(STATUS "Address sanitizer enabled.")
+endif()
+if(ADA_SANITIZE_UNDEFINED)
+  message(STATUS "Undefined sanitizer enabled.")
+endif()
+
+
+if (NOT CMAKE_BUILD_TYPE)
+  if(ADA_SANITIZE OR ADA_SANITIZE_BOUNDS_STRICT OR ADA_SANITIZE_UNDEFINED)
+    message(STATUS "No build type selected, default to Debug because you have sanitizers.")
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+  else()
+    message(STATUS "No build type selected, default to Release")
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  endif()
+endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_MACOSX_RPATH OFF)

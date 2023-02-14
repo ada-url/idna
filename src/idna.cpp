@@ -1,0 +1,8 @@
+#include "mapping.cpp"
+#include "normalization.cpp"
+#include "punycode.cpp"
+#include "to_ascii.cpp"
+#include "to_unicode.cpp"
+#include "unicode_transcoding.cpp"
+#include "utils.cpp"
+#include "validity.cpp"

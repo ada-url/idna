@@ -13,6 +13,17 @@ include(cmake/idna-flags.cmake)
 
 add_subdirectory(src)
 
+option(ADA_IDNA_BENCHMARKS "Build benchmarks" OFF)
+
+if (ADA_IDNA_BENCHMARKS)
+  message(STATUS "Ada benchmarks enabled.")
+  add_subdirectory(benchmarks)
+else(ADA_IDNA_BENCHMARKS)
+  if (is_top_project)
+    message(STATUS "Ada IDNA benchmarks disabled. Set ADA_IDNA_BENCHMARKS=ON to enable them.")
+  endif()
+endif()
+
 if (BUILD_TESTING)
   message(STATUS "The tests are enabled.")
   add_subdirectory(tests)

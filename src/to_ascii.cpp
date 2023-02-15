@@ -1,5 +1,3 @@
-#include "ada/idna/to_ascii.h"
-
 #include <cstdint>
 
 #include "ada/idna/mapping.h"
@@ -7,6 +5,7 @@
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
 #include "ada/idna/validity.h"
+#include "idna.h"
 
 namespace ada::idna {
 

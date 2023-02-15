@@ -1,7 +1,8 @@
-
-#include "ada/idna/unicode_transcoding.h"
 #include <cstdint>
 #include <cstring>
+
+#include "idna.h"
+
 namespace ada::idna {
 
 size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {

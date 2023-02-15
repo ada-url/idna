@@ -1,4 +1,3 @@
-
 #include <algorithm>
 #include <string_view>
 
@@ -1078,7 +1077,8 @@ bool is_label_valid(const std::u32string_view label) {
       0xe01d9, 0xe01da, 0xe01db, 0xe01dc, 0xe01dd, 0xe01de, 0xe01df, 0xe01e0,
       0xe01e1, 0xe01e2, 0xe01e3, 0xe01e4, 0xe01e5, 0xe01e6, 0xe01e7, 0xe01e8,
       0xe01e9, 0xe01ea, 0xe01eb, 0xe01ec, 0xe01ed, 0xe01ee, 0xe01ef};
-  if (std::binary_search(std::begin(combining), std::end(combining), label.front())) {
+  if (std::binary_search(std::begin(combining), std::end(combining),
+                         label.front())) {
     return false;
   }
   // We verify this next step as part of the mapping:
@@ -1154,7 +1154,8 @@ bool is_label_valid(const std::u32string_view label) {
     uint32_t c = label[i];
     if (c == 0x200c) {
       if (i > 0) {
-        if (std::binary_search(std::begin(virama), std::end(virama), label[i - 1])) {
+        if (std::binary_search(std::begin(virama), std::end(virama),
+                               label[i - 1])) {
           return true;
         }
       }
@@ -1178,7 +1179,8 @@ bool is_label_valid(const std::u32string_view label) {
               after.end());
     } else if (c == 0x200d) {
       if (i > 0) {
-        if (std::binary_search(std::begin(virama), std::end(virama), label[i - 1])) {
+        if (std::binary_search(std::begin(virama), std::end(virama),
+                               label[i - 1])) {
           return true;
         }
       }
@@ -1190,42 +1192,44 @@ bool is_label_valid(const std::u32string_view label) {
   // must satisfy all six of the numbered conditions in [IDNA2008] RFC 5893,
   // Section 2.
 
-
-
-   // The following rule, consisting of six conditions, applies to labels
-   // in Bidi domain names.  The requirements that this rule satisfies are
-   // described in Section 3.  All of the conditions must be satisfied for
-   // the rule to be satisfied.
-   // 
-   //  1.  The first character must be a character with Bidi property L, R,
-   //     or AL.  If it has the R or AL property, it is an RTL label; if it
-   //     has the L property, it is an LTR label.
-   // 
-   //  2.  In an RTL label, only characters with the Bidi properties R, AL,
-   //      AN, EN, ES, CS, ET, ON, BN, or NSM are allowed.
-   //
-   //   3.  In an RTL label, the end of the label must be a character with
-   //       Bidi property R, AL, EN, or AN, followed by zero or more
-   //       characters with Bidi property NSM.
-   //
-   //   4.  In an RTL label, if an EN is present, no AN may be present, and
-   //       vice versa.
-   //
-    //  5.  In an LTR label, only characters with the Bidi properties L, EN,
-   //       ES, CS, ET, ON, BN, or NSM are allowed.
-   //
-   //   6.  In an LTR label, the end of the label must be a character with
-   //       Bidi property L or EN, followed by zero or more characters with
-   //       Bidi property NSM.
-
+  // The following rule, consisting of six conditions, applies to labels
+  // in Bidi domain names.  The requirements that this rule satisfies are
+  // described in Section 3.  All of the conditions must be satisfied for
+  // the rule to be satisfied.
+  //
+  //  1.  The first character must be a character with Bidi property L, R,
+  //     or AL.  If it has the R or AL property, it is an RTL label; if it
+  //     has the L property, it is an LTR label.
+  //
+  //  2.  In an RTL label, only characters with the Bidi properties R, AL,
+  //      AN, EN, ES, CS, ET, ON, BN, or NSM are allowed.
+  //
+  //   3.  In an RTL label, the end of the label must be a character with
+  //       Bidi property R, AL, EN, or AN, followed by zero or more
+  //       characters with Bidi property NSM.
+  //
+  //   4.  In an RTL label, if an EN is present, no AN may be present, and
+  //       vice versa.
+  //
+  //  5.  In an LTR label, only characters with the Bidi properties L, EN,
+  //       ES, CS, ET, ON, BN, or NSM are allowed.
+  //
+  //   6.  In an LTR label, the end of the label must be a character with
+  //       Bidi property L or EN, followed by zero or more characters with
+  //       Bidi property NSM.
 
   auto find_direction = [](uint32_t code) -> direction {
-    auto it = std::lower_bound(std::begin(dir_table), std::end(dir_table), code, 
-    [](const directions& d, uint32_t c) { return d.final_code < c; });
+    auto it = std::lower_bound(
+        std::begin(dir_table), std::end(dir_table), code,
+        [](const directions& d, uint32_t c) { return d.final_code < c; });
     // next check is almost surely in vain, but we use it for safety.
-    if(it == std::end(dir_table)) { return direction::NONE; }
+    if (it == std::end(dir_table)) {
+      return direction::NONE;
+    }
     // We have that d.final_code >= c.
-    if (code >= it->start_code) { return it->direct; }
+    if (code >= it->start_code) {
+      return it->direct;
+    }
     return direction::NONE;
   };
   bool have_bidi = false;

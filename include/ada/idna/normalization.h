@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+
 namespace ada::idna {
 
 // Normalize the characters according to IDNA (Unicode Normalization Form C).

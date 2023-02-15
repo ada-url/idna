@@ -5,8 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "ada/idna/punycode.h"
-#include "ada/idna/unicode_transcoding.h"
+#include "idna.h"
 
 bool file_exists(std::string_view filename) {
   namespace fs = std::filesystem;

@@ -5,10 +5,12 @@
 #include <string_view>
 namespace ada::idna {
 
+uint32_t constexpr find_range_index(uint32_t key) noexcept;
+
 // If the input is ascii, then the mapping is just -> lower case.
-void ascii_map(char * input, size_t length);
+void constexpr ascii_map(char* input, size_t length) noexcept;
 // check whether an ascii string needs mapping
-bool ascii_has_upper_case(char * input, size_t length);
+bool constexpr ascii_has_upper_case(char* input, size_t length) noexcept;
 // Map the characters according to IDNA, returning the empty string on error.
 std::u32string map(std::u32string_view input);
 

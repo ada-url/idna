@@ -35,14 +35,14 @@ cmake --build build
 
 The commands for users of Visual Studio are slightly different.
 
-Sample result (LLVM 14, Apple M2 processor):
+Sample result (LLVM 14, Apple M1 Max processor):
 
 ```
 ---------------------------------------------------------------------
 Benchmark           Time             CPU   Iterations UserCounters...
 ---------------------------------------------------------------------
-Ada              1411 ns         1411 ns       491877 speed=50.3364M/s time/byte=19.8664ns time/domain=235.085ns url/s=4.25378M/s
-Icu              2405 ns         2405 ns       299564 speed=29.5213M/s time/byte=33.8738ns time/url=400.84ns url/s=2.49476M/s
+Ada              1504 ns         1504 ns       440984 speed=48.5371M/s time/byte=20.6028ns time/domain=250.667ns url/s=3.98935M/s
+Icu              1898 ns         1897 ns       369967 speed=38.4721M/s time/byte=25.9928ns time/url=316.246ns url/s=3.16209M/s
 ```
 
 ## Contributing

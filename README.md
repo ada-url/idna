@@ -14,11 +14,13 @@ According to our benchmarks, it can be faster than ICU.
 ## Usage
 
 ```C++
-    std::string_view input = // non-empty UTF-8 string, must be percent decoded
+    std::string_view input = u8"meßagefactory.ca";// non-empty UTF-8 string, must be percent decoded
     std::string idna_ascii = ada::idna::to_ascii(input);
     if(idna_ascii.empty()) {
         // There was an error.
     }
+    std::cout << idna_ascii << std::endl;
+    // outputs 'xn--meagefactory-m9a.ca' if the input is u8"meßagefactory.ca"
 ```
 
 ## Benchmarks

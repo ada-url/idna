@@ -22,7 +22,7 @@ std::string inputs[] = {
     "xn--mgba3gch31f060k",
     "xn--1ch",
     "x-.\xc3\x9f",
-    "\xd9\x86\xd8\xa7\xd9\x85\xd9\x87\xe2\x80\x8c\xd8\xa7\xdb\x8c"
+    "me\xc3\x9f\x61\x67\x65\x66\x61\x63\x74\x6f\x72\x79\x2e\x63\x61", // https://lemire.me/blog/2023/01/23/international-domain-names-where-does-https-mesagefactory-ca-lead-you/
 };
 
 double inputs_total_byte = []() -> double {

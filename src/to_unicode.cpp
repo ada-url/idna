@@ -1,6 +1,7 @@
 #include "ada/idna/to_unicode.h"
 
 #include <string>
+#include <algorithm>
 
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"

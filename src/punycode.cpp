@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "ada/idna/to_ascii.h"
 #include "ada/idna/utils.h"
 
 namespace ada::idna {
@@ -46,12 +47,9 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
   int32_t i = 0;
   int32_t bias = initial_bias;
 
-  if ((utils::begins_with(input, "xn--") || utils::begins_with(input, "XN--") ||
-       utils::begins_with(input, "Xn--") ||
-       utils::begins_with(input, "xN--"))) {
-    input.remove_prefix(5);
-    written_out += 5;
-  }
+  auto last_pf_delimiter = input.find_last_of('-');
+  input.remove_prefix(last_pf_delimiter + 1);
+  written_out += last_pf_delimiter + 1;
 
   while (!input.empty()) {
     int32_t oldi = i;
@@ -98,17 +96,14 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
 
 bool verify_punycode(std::string_view input) {
   size_t written_out{0};
-
-  if ((utils::begins_with(input, "xn--") || utils::begins_with(input, "XN--") ||
-       utils::begins_with(input, "Xn--") ||
-       utils::begins_with(input, "xN--"))) {
-    input.remove_prefix(5);
-    written_out += 5;
-  }
-
   uint32_t n = initial_n;
   int32_t i = 0;
   int32_t bias = initial_bias;
+
+  if (!is_ascii(input)) {
+    return false;
+  }
+  input.remove_prefix(input.find_last_of('-'));
 
   while (!input.empty()) {
     int32_t oldi = i;
@@ -165,7 +160,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
       out.push_back(char(c));
     }
     if (c > 0x10ffff || (c >= 0xd880 && c < 0xe000)) {
-      return false;
+      // return false;
     }
   }
   size_t b = h;

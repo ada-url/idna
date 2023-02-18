@@ -2,12 +2,21 @@
 
 namespace ada::idna::utils {
 
-template <typename T, typename U>
-bool begins_with(T view, U prefix) {
-  if (view.size() < std::char_traits<U>::length(&prefix)) {
+bool constexpr begins_with(std::u32string_view view,
+                           std::u32string_view prefix) {
+  if (view.size() < prefix.size()) {
     return false;
   }
-  return view.substr(0, std::char_traits<U>::length(&prefix)) == prefix;
+
+  return view.substr(0, prefix.size()) == prefix;
+}
+
+bool constexpr begins_with(std::string_view view, std::string_view prefix) {
+  if (view.size() < prefix.size()) {
+    return false;
+  }
+
+  return view.find(prefix, 0) != 0;
 }
 
 }  // namespace ada::idna::utils

@@ -3,8 +3,9 @@
 
 namespace ada::idna::utils {
 
-template <typename T, typename U>
-inline bool begins_with(T view, U prefix);
+bool constexpr begins_with(std::u32string_view view,
+                           std::u32string_view prefix);
+bool constexpr begins_with(std::string_view view, std::string_view prefix);
 
 }  // namespace ada::idna::utils
 

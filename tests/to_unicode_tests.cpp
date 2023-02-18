@@ -1,3 +1,4 @@
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -66,7 +67,10 @@ int main(int argc, char** argv) {
   std::vector<std::string> lines = split_string(buffer);
   for (size_t i = 0; i + 1 < lines.size(); i += 2) {
     std::string utf8_string = lines[i];
-    std::string puny_string = lines[i + 1];
+    std::string puny_string{};
+    puny_string.resize(63);
+    puny_string.append(lines[i + 1]);
+
     if (!test(utf8_string, puny_string)) {
       return EXIT_FAILURE;
     }

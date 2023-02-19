@@ -22,7 +22,7 @@ bool constexpr begins_with(std::string_view view, std::string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
-  return view.substr(0, prefix.size()) == prefix;
+  return view.find(prefix) == 0;
 }
 
 bool constexpr is_ascii(std::u32string_view view) {

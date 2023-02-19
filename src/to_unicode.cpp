@@ -1,5 +1,6 @@
 #include "ada/idna/to_unicode.h"
 
+#include <algorithm>
 #include <string>
 
 #include "ada/idna/punycode.h"
@@ -25,19 +26,23 @@ std::string to_unicode(std::string_view input) {
       // Empty label - nothing to do.
     } else if (ada::idna::verify_punycode(label_view)) {
       bool should_skip = false;
-      if(label_view.find("xn--") == 0) {
+      if (label_view.find("xn--") == 0) {
         label_view.remove_prefix(4);
-      } else if(label_view[label_view.size()-1] != '-') {
+      } else if (label_view[label_view.size() - 1] != '-') {
         output.append(label_view);
         should_skip = true;
-      } 
-      if(!should_skip) {
+      }
+      if (!should_skip) {
         std::u32string tmp_buffer;
         if (ada::idna::punycode_to_utf32(label_view, tmp_buffer)) {
-          auto utf8_size = ada::idna::utf8_length_from_utf32(tmp_buffer.data(), tmp_buffer.size());
+          auto utf8_size = ada::idna::utf8_length_from_utf32(tmp_buffer.data(),
+                                                             tmp_buffer.size());
           std::string finalutf8(utf8_size, '\0');
-          ada::idna::utf32_to_utf8(tmp_buffer.data(), tmp_buffer.size(), finalutf8.data());
-          if(label_view[label_view.size()-1] == '-') { finalutf8.push_back('-'); }
+          ada::idna::utf32_to_utf8(tmp_buffer.data(), tmp_buffer.size(),
+                                   finalutf8.data());
+          if (label_view[label_view.size() - 1] == '-') {
+            finalutf8.push_back('-');
+          }
           output.append(finalutf8);
         } else {
           // ToUnicode never fails.  If any step fails, then the original input

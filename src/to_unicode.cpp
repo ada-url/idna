@@ -39,6 +39,8 @@ std::string to_unicode(std::string_view input) {
           // sequence is returned immediately in that step.
           output.append(std::string_view(label_start, label_size));
         }
+      } else {
+        output.append(std::string_view(label_start, label_size));
       }
     } else {
       output.append(label_view);

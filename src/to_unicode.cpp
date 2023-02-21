@@ -5,6 +5,7 @@
 
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
+#include "idna.h"
 
 namespace ada::idna {
 std::string to_unicode(std::string_view input) {
@@ -22,7 +23,7 @@ std::string to_unicode(std::string_view input) {
 
     auto label_view = std::string_view(label_start, label_size);
 
-    if (label_view.find("xn--") == 0) {
+    if (label_view.find("xn--") == 0 && ada::idna::is_ascii(label_view)) {
       label_view.remove_prefix(4);
       if (ada::idna::verify_punycode(label_view)) {
         std::u32string tmp_buffer;
@@ -36,7 +37,7 @@ std::string to_unicode(std::string_view input) {
         } else {
           // ToUnicode never fails.  If any step fails, then the original input
           // sequence is returned immediately in that step.
-          output.append(label_view);
+          output.append(std::string_view(label_start, label_size));
         }
       }
     } else {

@@ -7,5 +7,6 @@
 #include "ada/idna/punycode.h"
 #include "ada/idna/validity.h"
 #include "ada/idna/to_ascii.h"
+#include "ada/idna/to_unicode.h"
 
 #endif

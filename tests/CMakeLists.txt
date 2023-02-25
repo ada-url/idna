@@ -8,11 +8,13 @@ link_libraries(ada-idna)
 add_cpp_test(punycode_tests)
 add_cpp_test(to_ascii_tests)
 add_cpp_test(mapping_tests)
+add_cpp_test(to_unicode_tests)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
 target_link_libraries(punycode_tests PUBLIC stdc++fs)
 target_link_libraries(to_ascii_tests PUBLIC stdc++fs)
+target_link_libraries(to_unicode_tests PUBLIC stdc++fs)
 endif()
 endif()
 

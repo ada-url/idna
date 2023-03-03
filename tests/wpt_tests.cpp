@@ -44,9 +44,7 @@ bool idna_test_v2_to_ascii(std::string_view filename) {
         } catch (simdjson::simdjson_error ignored) {}
 
         std::string_view input = object["input"].get_string();
-
         std::string output = ada::idna::to_ascii(input);
-
         auto expected_output = object["output"];
 
         if (expected_output.is_null()) {

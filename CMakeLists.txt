@@ -15,6 +15,12 @@ add_subdirectory(src)
 
 option(ADA_IDNA_BENCHMARKS "Build benchmarks" OFF)
 
+if(ADA_IDNA_BENCHMARKS OR BUILD_TESTING)
+  include(${PROJECT_SOURCE_DIR}/cmake/import.cmake)
+  import_dependency(simdjson simdjson/simdjson 0a3a00c95665cc1fda760e121ba8d442945ede13)
+  add_dependency(simdjson)
+endif()
+
 if (ADA_IDNA_BENCHMARKS)
   message(STATUS "Ada benchmarks enabled.")
   add_subdirectory(benchmarks)

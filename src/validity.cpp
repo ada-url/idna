@@ -768,9 +768,9 @@ static directions dir_table[] = {
 // CheckJoiners and CheckBidi are true for URL specification.
 
 
-inline constexpr direction find_direction(uint32_t code_point) noexcept {
+inline static direction find_direction(uint32_t code_point) noexcept {
     auto it = std::lower_bound(std::begin(dir_table), std::end(dir_table), code_point, 
-                  [](const directions& d, uint32_t c) constexpr { return d.final_code < c; });
+                  [](const directions& d, uint32_t c) { return d.final_code < c; });
     
     // next check is almost surely in vain, but we use it for safety.
     if(it == std::end(dir_table)) { return direction::NONE; }
@@ -779,7 +779,7 @@ inline constexpr direction find_direction(uint32_t code_point) noexcept {
     return direction::NONE;
 }
 
-inline constexpr size_t find_last_not_of_nsm(const std::u32string_view label) noexcept {
+inline static size_t find_last_not_of_nsm(const std::u32string_view label) noexcept {
   for(size_t i = label.size() - 1; i >= 0; i--) 
     if(find_direction(label[i]) != direction::NSM) return i;
 
@@ -788,7 +788,7 @@ inline constexpr size_t find_last_not_of_nsm(const std::u32string_view label) no
 
 // An RTL label is a label that contains at least one character of type R, AL, or AN.
 // https://www.rfc-editor.org/rfc/rfc5893#section-2
-inline constexpr bool is_rtl_label(const std::u32string_view label) noexcept {
+inline static bool is_rtl_label(const std::u32string_view label) noexcept {
   for (size_t i = 0; i < label.size(); i++) {
     auto d = find_direction(label[i]);
     if ((d == direction::R) || (d == direction::AL) || (d == direction::AN)) 

@@ -1125,7 +1125,7 @@ bool is_label_valid(const std::u32string_view label) {
   // deviation.
 
   // If CheckJoiners, the label must satisify the ContextJ rules from Appendix
-  // A, in The Unicode Code Points and qInternationalized Domain Names for
+  // A, in The Unicode Code Points and Internationalized Domain Names for
   // Applications (IDNA) [IDNA2008].
   constexpr static uint32_t virama[] = {
       0x094D,  0x09CD,  0x0A4D,  0x0ACD,  0x0B4D,  0x0BCD,  0x0C4D,  0x0CCD,

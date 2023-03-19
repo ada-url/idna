@@ -1314,7 +1314,7 @@ bool is_label_valid(const std::u32string_view label) {
           return false;
         }
 
-        if(i == last_non_nsm_char - 1) {
+        if(i == last_non_nsm_char) {
           if (!(d == direction::L || d == direction::EN)) {
             return false;
           }

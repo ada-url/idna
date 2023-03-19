@@ -58,13 +58,17 @@ constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
 
     static_assert(sizeof(is_forbidden_domain_code_point_table) == 256);
 
-  bool is_forbidden_domain_code_point(const char c) noexcept {
+inline constexpr bool is_forbidden_domain_code_point(const char c) noexcept {
     return is_forbidden_domain_code_point_table[uint8_t(c)];
-  }
+}
 
 // We return "" on error. For now.
 static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   static const std::string error = "";
+  if(std::any_of(ut8_string.begin(), ut8_string.end(), is_forbidden_domain_code_point)){
+    return error;
+  }
+  
   // copy and map
   // we could be more efficient by avoiding the copy when unnecessary.
   std::string mapped_string = std::string(ut8_string);
@@ -121,14 +125,6 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
 // We return "" on error. For now.
 std::string to_ascii(std::string_view ut8_string) {
   if (is_ascii(ut8_string)) {
-    for(auto c : ut8_string) {
-      std::cout << "ASDASDFSDFSD " << c << std::endl;
-      if(is_forbidden_domain_code_point(c)) {
-        std::cout << "ERROR " << c << std::endl;
-        return "";
-      }
-    std::cout << "PASS " << c << std::endl;
-  }
     return from_ascii_to_ascii(ut8_string);
   }
   static const std::string error = "";
@@ -214,15 +210,10 @@ std::string to_ascii(std::string_view ut8_string) {
     }
   }
 
-  for(auto c : out) {
-    std::cout << "ASDASDFSDFSD " << c << std::endl;
-    if(is_forbidden_domain_code_point(c)) {
-      std::cout << "ERROR " << c << std::endl;
-      return error;
-    }
-    std::cout << "PASS " << c << std::endl;
+  if(std::any_of(out.begin(), out.end(), is_forbidden_domain_code_point)){
+    return error;
   }
-
+  
   return out;
 }
 }  // namespace ada::idna

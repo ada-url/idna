@@ -780,7 +780,7 @@ inline static direction find_direction(uint32_t code_point) noexcept {
 }
 
 inline static size_t find_last_not_of_nsm(const std::u32string_view label) noexcept {
-  for(size_t i = label.size() - 1; i >= 0; i--) 
+  for(size_t i = label.size() - 1;; i--) 
     if(find_direction(label[i]) != direction::NSM) return i;
 
   return std::u32string_view::npos;

@@ -770,7 +770,7 @@ static directions dir_table[] = {
 
 inline constexpr direction find_direction(uint32_t code_point) noexcept {
     auto it = std::lower_bound(std::begin(dir_table), std::end(dir_table), code_point, 
-                  [](const directions& d, uint32_t c) { return d.final_code < c; });
+                  [](const directions& d, uint32_t c) constexpr { return d.final_code < c; });
     
     // next check is almost surely in vain, but we use it for safety.
     if(it == std::end(dir_table)) { return direction::NONE; }

@@ -43,6 +43,25 @@ bool constexpr is_ascii(std::string_view view) {
   return true;
 }
 
+constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+    static_assert(sizeof(is_forbidden_domain_code_point_table) == 256);
+
+  bool is_forbidden_domain_code_point(const char c) noexcept {
+    return is_forbidden_domain_code_point_table[uint8_t(c)];
+  }
+
 // We return "" on error. For now.
 static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   static const std::string error = "";
@@ -102,6 +121,14 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
 // We return "" on error. For now.
 std::string to_ascii(std::string_view ut8_string) {
   if (is_ascii(ut8_string)) {
+    for(auto c : ut8_string) {
+      std::cout << "ASDASDFSDFSD " << c << std::endl;
+      if(is_forbidden_domain_code_point(c)) {
+        std::cout << "ERROR " << c << std::endl;
+        return "";
+      }
+    std::cout << "PASS " << c << std::endl;
+  }
     return from_ascii_to_ascii(ut8_string);
   }
   static const std::string error = "";
@@ -186,6 +213,16 @@ std::string to_ascii(std::string_view ut8_string) {
       out.push_back('.');
     }
   }
+
+  for(auto c : out) {
+    std::cout << "ASDASDFSDFSD " << c << std::endl;
+    if(is_forbidden_domain_code_point(c)) {
+      std::cout << "ERROR " << c << std::endl;
+      return error;
+    }
+    std::cout << "PASS " << c << std::endl;
+  }
+
   return out;
 }
 }  // namespace ada::idna

@@ -780,7 +780,7 @@ inline static direction find_direction(uint32_t code_point) noexcept {
 }
 
 inline static size_t find_last_not_of_nsm(const std::u32string_view label) noexcept {
-  for(size_t i = label.size() - 1;; i--) 
+  for(size_t i = label.size() - 1; i >= 0; i--) 
     if(find_direction(label[i]) != direction::NSM) return i;
 
   return std::u32string_view::npos;
@@ -789,13 +789,13 @@ inline static size_t find_last_not_of_nsm(const std::u32string_view label) noexc
 // An RTL label is a label that contains at least one character of type R, AL, or AN.
 // https://www.rfc-editor.org/rfc/rfc5893#section-2
 inline static bool is_rtl_label(const std::u32string_view label) noexcept {
+  const size_t mask = (1u << direction::R) | (1u << direction::AL) | (1u << direction::AN);
+  
+  size_t directions = 0;
   for (size_t i = 0; i < label.size(); i++) {
-    auto d = find_direction(label[i]);
-    if ((d == direction::R) || (d == direction::AL) || (d == direction::AN)) 
-      return true;
+    directions |= 1u << find_direction(label[i]);
   }
-
-  return false;
+  return (directions & mask) != 0;
 }
 
 
@@ -1252,58 +1252,22 @@ bool is_label_valid(const std::u32string_view label) {
    //       Bidi property NSM.
 
 
-  bool is_bidi_domain = is_rtl_label(label);
   size_t last_non_nsm_char = find_last_not_of_nsm(label);
-  if(last_non_nsm_char ==  std::u32string_view::npos) {
+  if(last_non_nsm_char == std::u32string_view::npos) {
     return false;
   }
 
-  if(is_bidi_domain) {
-    const direction first_d = find_direction(label[0]);
-
+  // A "Bidi domain name" is a domain name that contains at least one RTL label. 
+  // The following rule, consisting of six conditions, applies to labels in Bidi
+  // domain names.
+  if(is_rtl_label(label)) {
     // The first character must be a character with Bidi property L, R,
-    // or AL.  If it has the R or AL property, it is an RTL label; if it
+    // or AL. If it has the R or AL property, it is an RTL label; if it
     // has the L property, it is an LTR label.
-    bool eval_as_rtl = (first_d == direction::AL) || (first_d == direction::R);
-    bool eval_as_ltr = first_d == direction::L;
+    
+    if(find_direction(label[0]) == direction::L) {
+      // Eval as LTR
 
-    if(eval_as_rtl) {
-      // In an RTL label, if an EN is present, no AN may be present, and vice versa.
-      bool has_an = false;
-      bool has_en = false;
-      for(size_t i = 0; i <= last_non_nsm_char; i++) {
-        const direction d = find_direction(label[i]);
-
-        if(d == direction::EN) {
-          if(has_an) return false;
-          has_en = true;
-        }
-
-        if(d == direction::AN) {
-          if(has_en) return false;
-          has_an = true;
-        }
-
-        if (!(d == direction::R  || d == direction::AL || d == direction::AN ||
-              d == direction::EN || d == direction::ES || d == direction::CS ||
-              d == direction::ET || d == direction::ON || d == direction::BN ||
-              d == direction::NSM)) {
-          return false;
-        }
-
-        if(i == last_non_nsm_char) {
-          if (!(d == direction::R || d == direction::AL || d == direction::AN || 
-                d == direction::EN)) {
-            return false;
-          }
-
-          return true;
-        }
-
-      }
-    }
-
-    if(eval_as_ltr) {
       // In an LTR label, only characters with the Bidi properties L, EN,
       // ES, CS, ET, ON, BN, or NSM are allowed.
       for(size_t i = 0; i < last_non_nsm_char; i++) {
@@ -1314,14 +1278,41 @@ bool is_label_valid(const std::u32string_view label) {
           return false;
         }
 
-        if(i == last_non_nsm_char) {
-          if (!(d == direction::L || d == direction::EN)) {
-            return false;
-          }
-
-          return true;
+        if((i == last_non_nsm_char) && !(d == direction::L || d == direction::EN)) {
+          return false;
         }
       }
+
+      return true;
+
+    } else {
+      // Eval as RTL
+
+      bool has_an = false;
+      bool has_en = false;
+      for(size_t i = 0; i <= last_non_nsm_char; i++) {
+        const direction d = find_direction(label[i]);
+
+        // In an RTL label, if an EN is present, no AN may be present, and vice versa.
+        if((d == direction::EN && ((has_en=true) && has_an)) || 
+           (d == direction::AN && ((has_an=true) && has_en))) {
+          return false;
+        } 
+
+        if (!(d == direction::R  || d == direction::AL || d == direction::AN ||
+              d == direction::EN || d == direction::ES || d == direction::CS ||
+              d == direction::ET || d == direction::ON || d == direction::BN ||
+              d == direction::NSM)) {
+          return false;
+        }
+
+        if(i == last_non_nsm_char && !(d == direction::R || d == direction::AL || 
+                                       d == direction::AN || d == direction::EN)) {
+          return false;
+        }
+      }
+
+      return true;
     }
   }
 

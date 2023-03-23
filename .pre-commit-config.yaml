@@ -1,8 +1,0 @@
-repos:
--   repo: local
-    hooks:
-    -   id: clang-format
-        name: clang-format
-        entry: ./hooks/clang-format-hook
-        types_or: [c++, c]
-        language: system

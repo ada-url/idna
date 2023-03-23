@@ -1,7 +1,0 @@
-#!/bin/bash
-
-for file in `git diff-index --cached --name-only HEAD | grep -iE '\.(cpp|cc|c|h|hpp)$'`
-do
-    clang-format -i "${file}"
-    git add "${file}"
-done

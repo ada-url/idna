@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
   std::string buffer = read_file(filename);
   std::vector<std::string> lines = split_string(buffer);
   for (size_t i = 0; i + 1 < lines.size(); i += 2) {
-    std::string input  = lines[i];
+    std::string input = lines[i];
     std::string output = lines[i + 1];
     if (!test(input, output)) {
       return EXIT_FAILURE;

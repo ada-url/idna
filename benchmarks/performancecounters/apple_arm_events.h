@@ -923,15 +923,15 @@ typedef struct {
 static const event_alias profile_events[] = {
     {"cycles",
      {
-         "FIXED_CYCLES",       // Apple
-                               // A7-A15
+         "FIXED_CYCLES",             // Apple
+                                     // A7-A15
          "CPU_CLK_UNHALTED.THREAD",  // Intel Core 1th-10th
          "CPU_CLK_UNHALTED.CORE",    // Intel Yonah, Merom
      }},
     {"instructions",
      {
-         "FIXED_INSTRUCTIONS", // Apple A7-A15
-         "INST_RETIRED.ANY"  // Intel Yonah, Merom, Core 1th-10th
+         "FIXED_INSTRUCTIONS",  // Apple A7-A15
+         "INST_RETIRED.ANY"     // Intel Yonah, Merom, Core 1th-10th
      }},
     {"branches",
      {

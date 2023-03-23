@@ -33,8 +33,10 @@ class uninorms {
 
   struct Hangul {
     // Hangul decomposition and composition
-    static const char32_t SBase = 0xAC00, LBase = 0x1100, VBase = 0x1161, TBase = 0x11A7;
-    static const char32_t LCount = 19, VCount = 21, TCount = 28, NCount = VCount * TCount, SCount = LCount * NCount;
+    static const char32_t SBase = 0xAC00, LBase = 0x1100, VBase = 0x1161,
+                          TBase = 0x11A7;
+    static const char32_t LCount = 19, VCount = 21, TCount = 28,
+                          NCount = VCount * TCount, SCount = LCount * NCount;
   };
 
   static const uint8_t ccc_index[CHARS >> 8];
@@ -49,5 +51,5 @@ class uninorms {
   static const char32_t decomposition_data[];
 };
 
-} // namespace unilib
-} // namespace ufal
+}  // namespace unilib
+}  // namespace ufal

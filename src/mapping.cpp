@@ -1,5 +1,6 @@
 #include "ada/idna/mapping.h"
 
+#include <algorithm>
 #include <array>
 #include <string>
 

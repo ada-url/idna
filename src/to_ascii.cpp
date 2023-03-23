@@ -1,5 +1,6 @@
 #include "ada/idna/to_ascii.h"
 
+#include <algorithm>
 #include <cstdint>
 
 #include "ada/idna/mapping.h"

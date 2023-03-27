@@ -16,17 +16,14 @@ size_t N = 1000;
 
 #include <benchmark/benchmark.h>
 
-std::string
-    inputs
-        [] =
-            {
-                "-x.xn--zca",
-                "xn--zca.xn--zca",
-                "xn--mgba3gch31f060k",
-                "xn--1ch",
-                "x-.\xc3\x9f",
-                "me\xc3\x9f\x61\x67\x65\x66\x61\x63\x74\x6f\x72\x79\x2e\x63"
-                "\x61",  // https://lemire.me/blog/2023/01/23/international-domain-names-where-does-https-mesagefactory-ca-lead-you/
+std::string inputs[] = {
+    "-x.xn--zca",
+    "xn--zca.xn--zca",
+    "xn--mgba3gch31f060k",
+    "xn--1ch",
+    "x-.\xc3\x9f",
+    "me\xc3\x9f\x61\x67\x65\x66\x61\x63\x74\x6f\x72\x79\x2e\x63"
+    "\x61",  // https://lemire.me/blog/2023/01/23/international-domain-names-where-does-https-mesagefactory-ca-lead-you/
 };
 
 double inputs_total_byte = []() -> double {

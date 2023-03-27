@@ -1,5 +1,6 @@
 #include "ada/idna/mapping.h"
 
+#include <algorithm>
 #include <array>
 #include <string>
 
@@ -31,47 +32,49 @@ uint32_t find_range_index(uint32_t key) {
   return low == 0 ? 0 : low - 1;
 }
 
-bool ascii_has_upper_case(char * input, size_t length) {
-    auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
-    uint64_t broadcast_80 = broadcast(0x80);
-    uint64_t broadcast_Ap = broadcast(128 - 'A');
-    uint64_t broadcast_Zp = broadcast(128 - 'Z');
-    size_t i = 0;
+bool ascii_has_upper_case(char* input, size_t length) {
+  auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
+  uint64_t broadcast_80 = broadcast(0x80);
+  uint64_t broadcast_Ap = broadcast(128 - 'A');
+  uint64_t broadcast_Zp = broadcast(128 - 'Z');
+  size_t i = 0;
 
-    uint64_t runner{0};
+  uint64_t runner{0};
 
-    for (; i + 7 < length; i += 8) {
-      uint64_t word{};
-      memcpy(&word, input + i, sizeof(word));
-      runner |= (((word+broadcast_Ap)^(word+broadcast_Zp))&broadcast_80);
-    }
-    if (i < length) {
-      uint64_t word{};
-      memcpy(&word, input + i, length - i);
-      runner |= (((word+broadcast_Ap)^(word+broadcast_Zp))&broadcast_80);
-    }
-    return runner != 0;
+  for (; i + 7 < length; i += 8) {
+    uint64_t word{};
+    memcpy(&word, input + i, sizeof(word));
+    runner |= (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80);
+  }
+  if (i < length) {
+    uint64_t word{};
+    memcpy(&word, input + i, length - i);
+    runner |= (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80);
+  }
+  return runner != 0;
 }
 
-void ascii_map(char * input, size_t length) {
-    auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
-    uint64_t broadcast_80 = broadcast(0x80);
-    uint64_t broadcast_Ap = broadcast(128 - 'A');
-    uint64_t broadcast_Zp = broadcast(128 - 'Z');
-    size_t i = 0;
+void ascii_map(char* input, size_t length) {
+  auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
+  uint64_t broadcast_80 = broadcast(0x80);
+  uint64_t broadcast_Ap = broadcast(128 - 'A');
+  uint64_t broadcast_Zp = broadcast(128 - 'Z');
+  size_t i = 0;
 
-    for (; i + 7 < length; i += 8) {
-      uint64_t word{};
-      memcpy(&word, input + i, sizeof(word));
-      word ^= (((word+broadcast_Ap)^(word+broadcast_Zp))&broadcast_80)>>2;
-      memcpy(input + i, &word, sizeof(word));
-    }
-    if (i < length) {
-      uint64_t word{};
-      memcpy(&word, input + i, length - i);
-      word ^= (((word+broadcast_Ap)^(word+broadcast_Zp))&broadcast_80)>>2;
-      memcpy(input + i, &word, length - i);
-    }
+  for (; i + 7 < length; i += 8) {
+    uint64_t word{};
+    memcpy(&word, input + i, sizeof(word));
+    word ^=
+        (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
+    memcpy(input + i, &word, sizeof(word));
+  }
+  if (i < length) {
+    uint64_t word{};
+    memcpy(&word, input + i, length - i);
+    word ^=
+        (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
+    memcpy(input + i, &word, length - i);
+  }
 }
 
 // Map the characters according to IDNA, returning the empty string on error.
@@ -112,8 +115,7 @@ std::u32string map(std::u32string_view input) {
         {
           size_t char_count = (descriptor >> 24);
           uint16_t char_index = uint16_t(descriptor >> 8);
-          for (size_t idx = char_index; idx < char_index + char_count;
-               idx++) {
+          for (size_t idx = char_index; idx < char_index + char_count; idx++) {
             answer.push_back(mappings[idx]);
           }
         }

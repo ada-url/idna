@@ -13,6 +13,8 @@ include(cmake/idna-flags.cmake)
 
 add_subdirectory(src)
 
+include(cmake/clang-format.cmake)
+
 option(ADA_IDNA_BENCHMARKS "Build benchmarks" OFF)
 
 if(ADA_IDNA_BENCHMARKS OR BUILD_TESTING)

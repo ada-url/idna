@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+#
+# Format C++ code using clang-format
+#
+
 import os
 import sys
 import subprocess

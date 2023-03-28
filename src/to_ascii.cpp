@@ -64,7 +64,7 @@ inline constexpr bool is_forbidden_domain_code_point(const char c) noexcept {
 }
 
 // We return "" on error. For now.
-static std::string from_ascii_to_ascii(std::string_view ut8_string) {
+std::string from_ascii_to_ascii(std::string_view ut8_string) {
   static const std::string error = "";
   if (std::any_of(ut8_string.begin(), ut8_string.end(),
                   is_forbidden_domain_code_point)) {

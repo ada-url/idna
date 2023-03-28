@@ -20,7 +20,7 @@ bool constexpr begins_with(std::string_view view, std::string_view prefix);
 bool constexpr is_ascii(std::u32string_view view);
 bool constexpr is_ascii(std::string_view view);
 
-static std::string from_ascii_to_ascii(std::string_view ut8_string);
+std::string from_ascii_to_ascii(std::string_view ut8_string);
 
 }  // namespace ada::idna
 

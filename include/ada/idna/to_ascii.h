@@ -5,6 +5,7 @@
 #include <string_view>
 
 namespace ada::idna {
+
 // Converts a domain (e.g., www.google.com) possibly containing international
 // characters to an ascii domain (with punycode). It will not do percent
 // decoding: percent decoding should be done prior to calling this function. We

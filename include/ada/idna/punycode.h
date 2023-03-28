@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+
 namespace ada::idna {
 
 bool punycode_to_utf32(std::string_view input, std::u32string& out);

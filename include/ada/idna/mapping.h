@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+
 namespace ada::idna {
 
 // If the input is ascii, then the mapping is just -> lower case.

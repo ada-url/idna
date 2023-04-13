@@ -86,7 +86,7 @@ BENCHMARK(Ada);
 #if ICU_AVAILABLE
 
 // returns empty string on error
-std::string icu_to_array(std::string_view input) {
+std::string icu_to_ascii(std::string_view input) {
   static std::string error = "";
 
   std::string out(255, 0);
@@ -153,7 +153,7 @@ std::string icu_to_array(std::string_view input) {
 static void Icu(benchmark::State& state) {
   for (auto _ : state) {
     for (std::string& url_string : inputs) {
-      benchmark::DoNotOptimize(icu_to_array(url_string));
+      benchmark::DoNotOptimize(icu_to_ascii(url_string));
     }
   }
 
@@ -163,7 +163,7 @@ static void Icu(benchmark::State& state) {
       std::atomic_thread_fence(std::memory_order_acquire);
       collector.start();
       for (std::string& url_string : inputs) {
-        benchmark::DoNotOptimize(icu_to_array(url_string));
+        benchmark::DoNotOptimize(icu_to_ascii(url_string));
       }
       std::atomic_thread_fence(std::memory_order_release);
       event_count allocate_count = collector.end();
@@ -200,7 +200,7 @@ BENCHMARK(Icu);
 bool verify() {
   bool is_ok = true;
   for (std::string& url_string : inputs) {
-    std::string icu_answer = icu_to_array(url_string);
+    std::string icu_answer = icu_to_ascii(url_string);
     std::string ada_answer = ada::idna::to_ascii(url_string);
     if (icu_answer != ada_answer) {
       std::cerr << " ada/icu mismatch " << ada_answer << " vs. " << icu_answer

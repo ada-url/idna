@@ -45,3 +45,9 @@ Benchmark           Time             CPU   Iterations UserCounters...
 Ada              1504 ns         1504 ns       440984 speed=48.5371M/s time/byte=20.6028ns time/domain=250.667ns url/s=3.98935M/s
 Icu              1898 ns         1897 ns       369967 speed=38.4721M/s time/byte=25.9928ns time/url=316.246ns url/s=3.16209M/s
 ```
+
+## License
+
+This code is made available under the Apache License 2.0 as well as the MIT license. For unicode processing, we rely on a few functions from UniLib which are licensed under the Mozilla Public License v.2.0.
+
+Our tests include third-party code and data. The benchmarking code includes third-party code: it is provided for research purposes only and not part of the library.

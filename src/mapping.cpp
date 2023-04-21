@@ -33,7 +33,9 @@ uint32_t find_range_index(uint32_t key) {
 }
 
 bool ascii_has_upper_case(char* input, size_t length) {
-  auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
+  auto broadcast = [](uint8_t v) -> uint64_t {
+    return 0x101010101010101ull * v;
+  };
   uint64_t broadcast_80 = broadcast(0x80);
   uint64_t broadcast_Ap = broadcast(128 - 'A');
   uint64_t broadcast_Zp = broadcast(128 - 'Z' - 1);
@@ -55,7 +57,9 @@ bool ascii_has_upper_case(char* input, size_t length) {
 }
 
 void ascii_map(char* input, size_t length) {
-  auto broadcast = [](uint8_t v) -> uint64_t { return 0x101010101010101 * v; };
+  auto broadcast = [](uint8_t v) -> uint64_t {
+    return 0x101010101010101ull * v;
+  };
   uint64_t broadcast_80 = broadcast(0x80);
   uint64_t broadcast_Ap = broadcast(128 - 'A');
   uint64_t broadcast_Zp = broadcast(128 - 'Z' - 1);

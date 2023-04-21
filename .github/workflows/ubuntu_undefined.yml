@@ -1,4 +1,4 @@
-name: Ubuntu 22.04
+name: Ubuntu 22.04 with undefined sanitizer
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         shared: [ON, OFF]
-        cxx: [g++-12, clang++-14]
+        cxx: [clang++-14]
     steps:
       - uses: actions/checkout@v3
       - name: Prepare

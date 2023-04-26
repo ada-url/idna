@@ -11,8 +11,16 @@ namespace ada::idna {
 // decoding: percent decoding should be done prior to calling this function. We
 // do not remove tabs and spaces, they should have been removed prior to calling
 // this function. We also do not trim control characters. We also assume that
-// the input is not empty. We return "" on error. For now.
+// the input is not empty. We return "" on error.
+//
+// Example: "www.öbb.at" -> "www.xn--bb-eka.at"
+//
+// This function may accept or even produce invalid domains.
 std::string to_ascii(std::string_view ut8_string);
+
+// Returns true if the string contains a forbidden code point according to the WHATGL URL
+// specification: https://url.spec.whatwg.org/#forbidden-domain-code-point
+bool contains_forbidden_domain_code_point(std::string_view ascii_string);
 
 bool constexpr begins_with(std::u32string_view view,
                            std::u32string_view prefix);
@@ -21,7 +29,6 @@ bool constexpr begins_with(std::string_view view, std::string_view prefix);
 bool constexpr is_ascii(std::u32string_view view);
 bool constexpr is_ascii(std::string_view view);
 
-std::string from_ascii_to_ascii(std::string_view ut8_string);
 
 }  // namespace ada::idna
 

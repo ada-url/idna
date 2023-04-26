@@ -18,8 +18,9 @@ namespace ada::idna {
 // This function may accept or even produce invalid domains.
 std::string to_ascii(std::string_view ut8_string);
 
-// Returns true if the string contains a forbidden code point according to the WHATGL URL
-// specification: https://url.spec.whatwg.org/#forbidden-domain-code-point
+// Returns true if the string contains a forbidden code point according to the
+// WHATGL URL specification:
+// https://url.spec.whatwg.org/#forbidden-domain-code-point
 bool contains_forbidden_domain_code_point(std::string_view ascii_string);
 
 bool constexpr begins_with(std::u32string_view view,
@@ -28,7 +29,6 @@ bool constexpr begins_with(std::string_view view, std::string_view prefix);
 
 bool constexpr is_ascii(std::u32string_view view);
 bool constexpr is_ascii(std::string_view view);
-
 
 }  // namespace ada::idna
 

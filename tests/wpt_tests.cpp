@@ -48,7 +48,7 @@ bool idna_test_v2_to_ascii(std::string_view filename) {
 
     std::string_view input = object["input"].get_string();
     std::string output = ada::idna::to_ascii(input);
-    if(ada::idna::contains_forbidden_domain_code_point(output)) {
+    if (ada::idna::contains_forbidden_domain_code_point(output)) {
       output = "";
     }
     auto expected_output = object["output"];

@@ -4,7 +4,7 @@
 #include "ada_idna.h"
 
 int main(int, char *[]) {
-  std::string input (
+  std::string input(
       "\x2d\x2d\x5d\x2d\x2d\x2d\x2d\x01\x00\x00\x00\x00\x00\x00\x77\x6d\x2d\x77"
       "\x77\x6d\x77\x2d\x77\x77\x77\x77\x77\x77\x73\x61\x61\x61\x61\x61\x61\x61"
       "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61"
@@ -10826,14 +10826,15 @@ int main(int, char *[]) {
       "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61"
       "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61"
       "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61"
-      "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x77\x77\x73",194796)
-      ;
-      std::u32string output;
-      bool x = ada::idna::punycode_to_utf32(input, output);
-std::cout << x << std::endl;
-std::cout << input.size()  << std::endl;
-std::cout << output.size()*sizeof(uint32_t)  << std::endl;
+      "\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x61\x77\x77"
+      "\x73",
+      194796);
+  std::u32string output;
+  bool x = ada::idna::punycode_to_utf32(input, output);
+  std::cout << x << std::endl;
+  std::cout << input.size() << std::endl;
+  std::cout << output.size() * sizeof(uint32_t) << std::endl;
 
-      //auto url = ada::idna::to_ascii("www.google.com");
+  // auto url = ada::idna::to_ascii("www.google.com");
   return EXIT_SUCCESS;
 }

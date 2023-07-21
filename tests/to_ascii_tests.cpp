@@ -64,7 +64,17 @@ bool special_cases() {
   return true;
 }
 
+bool comma_test() {
+  if (ada::idna::to_ascii("128.0,0.1").empty()) {
+    return false;
+  }
+  return true;
+}
+
 int main(int argc, char** argv) {
+  if (!comma_test()) {
+    return EXIT_FAILURE;
+  }
   if (!special_cases()) {
     return EXIT_FAILURE;
   }

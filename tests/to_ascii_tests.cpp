@@ -72,7 +72,7 @@ bool comma_test() {
 }
 
 int main(int argc, char** argv) {
-  if(!comma_test()) {
+  if (!comma_test()) {
     return EXIT_FAILURE;
   }
   if (!special_cases()) {

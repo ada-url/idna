@@ -16,14 +16,14 @@ bool constexpr begins_with(std::u32string_view view,
   if (view.size() < prefix.size()) {
     return false;
   }
-  return view.substr(0, prefix.size()) == prefix;
+  return std::equal(prefix.begin(), prefix.end(), view.begin());
 }
 
 bool constexpr begins_with(std::string_view view, std::string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
-  return view.substr(0, prefix.size()) == prefix;
+  return std::equal(prefix.begin(), prefix.end(), view.begin());
 }
 
 bool constexpr is_ascii(std::u32string_view view) {

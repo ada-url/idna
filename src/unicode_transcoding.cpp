@@ -1,5 +1,6 @@
 #include "ada/idna/unicode_transcoding.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 
@@ -129,15 +130,11 @@ size_t utf8_length_from_utf32(const char32_t* buf, size_t len) {
 
 size_t utf32_length_from_utf8(const char* buf, size_t len) {
   const int8_t* p = reinterpret_cast<const int8_t*>(buf);
-  size_t counter{0};
-  for (size_t i = 0; i < len; i++) {
+  return std::count_if(p, std::next(p, len), [](int8_t c) {
     // -65 is 0b10111111, anything larger in two-complement's
     // should start a new code point.
-    if (p[i] > -65) {
-      counter++;
-    }
-  }
-  return counter;
+    return c > -65;
+  });
 }
 
 size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {

@@ -11,8 +11,7 @@
 
 namespace ada::idna {
 
-bool begins_with(std::u32string_view view,
-                           std::u32string_view prefix) {
+bool begins_with(std::u32string_view view, std::u32string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }

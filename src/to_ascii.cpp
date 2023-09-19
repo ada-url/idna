@@ -11,18 +11,19 @@
 
 namespace ada::idna {
 
-bool constexpr begins_with(std::u32string_view view,
-                           std::u32string_view prefix) {
+bool begins_with(std::u32string_view view, std::u32string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
+  // constexpr as of C++20
   return std::equal(prefix.begin(), prefix.end(), view.begin());
 }
 
-bool constexpr begins_with(std::string_view view, std::string_view prefix) {
+bool begins_with(std::string_view view, std::string_view prefix) {
   if (view.size() < prefix.size()) {
     return false;
   }
+  // constexpr as of C++20
   return std::equal(prefix.begin(), prefix.end(), view.begin());
 }
 

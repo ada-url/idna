@@ -6,7 +6,7 @@
 
 The ada-url/ada library is a C++ library implementing the `to_ascii` and `to_unicode` functions from the [Unicode Technical Standard](https://www.unicode.org/reports/tr46/#ToUnicode) supporting a wide range of systems. It is suitable for URL parsing. 
 
-Our IDNA library is used by the Node.js runtime and by [ClickHouse](https://github.com/ClickHouse/ClickHouse/pull/57969#event-11299892419).
+Our IDNA library is used by the Node.js runtime and by [ClickHouse](https://github.com/ClickHouse/ClickHouse/pull/58454).
 
 According to our benchmarks, it can be faster than ICU.
 

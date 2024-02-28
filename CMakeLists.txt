@@ -42,3 +42,14 @@ else()
 endif(BUILD_TESTING)
 
 add_subdirectory(singleheader)
+
+
+install(
+    FILES include/idna.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(
+    DIRECTORY include/ada
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)

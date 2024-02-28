@@ -37,3 +37,10 @@ endif()
 if(ADA_SANITIZE_UNDEFINED)
   target_compile_options(ada-idna INTERFACE -fsanitize=undefined -fno-sanitize-recover=all)
 endif()
+
+install(
+    TARGETS ada-idna
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)

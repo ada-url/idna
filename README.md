@@ -12,7 +12,7 @@ According to our benchmarks, it can be faster than ICU.
 
 ## Requirements
 
-- A recent C++ compiler supporting C++17. We test GCC 9 or better, LLVM 10 or better and Microsoft Visual Studio 2022.
+- A recent C++ compiler supporting C++20. We test GCC 12 or better, LLVM 12 or better and Microsoft Visual Studio 2022.
 
 ## Usage
 

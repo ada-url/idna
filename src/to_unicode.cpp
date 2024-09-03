@@ -20,7 +20,7 @@ std::string to_unicode(std::string_view input) {
         is_last_label ? input.size() - label_start : loc_dot - label_start;
     auto label_view = std::string_view(input.data() + label_start, label_size);
 
-    if (ada::idna::begins_with(label_view, "xn--") &&
+    if (label_view.starts_with("xn--") &&
         ada::idna::is_ascii(label_view)) {
       label_view.remove_prefix(4);
       if (ada::idna::verify_punycode(label_view)) {

@@ -22,9 +22,6 @@ std::string to_ascii(std::string_view ut8_string);
 // https://url.spec.whatwg.org/#forbidden-domain-code-point
 bool contains_forbidden_domain_code_point(std::string_view ascii_string);
 
-bool begins_with(std::u32string_view view, std::u32string_view prefix);
-bool begins_with(std::string_view view, std::string_view prefix);
-
 bool constexpr is_ascii(std::u32string_view view);
 bool constexpr is_ascii(std::string_view view);
 

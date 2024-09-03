@@ -11,22 +11,6 @@
 
 namespace ada::idna {
 
-bool begins_with(std::u32string_view view, std::u32string_view prefix) {
-  if (view.size() < prefix.size()) {
-    return false;
-  }
-  // constexpr as of C++20
-  return std::equal(prefix.begin(), prefix.end(), view.begin());
-}
-
-bool begins_with(std::string_view view, std::string_view prefix) {
-  if (view.size() < prefix.size()) {
-    return false;
-  }
-  // constexpr as of C++20
-  return std::equal(prefix.begin(), prefix.end(), view.begin());
-}
-
 bool constexpr is_ascii(std::u32string_view view) {
   for (uint32_t c : view) {
     if (c >= 0x80) {
@@ -89,7 +73,7 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
     label_start += label_size_with_dot;
     if (label_size == 0) {
       // empty label? Nothing to do.
-    } else if (begins_with(label_view, "xn--")) {
+    } else if (label_view.starts_with("xn--")) {
       // The xn-- part is the expensive game.
       out.append(label_view);
       std::string_view puny_segment_ascii(
@@ -156,7 +140,7 @@ std::string to_ascii(std::string_view ut8_string) {
     label_start += label_size_with_dot;
     if (label_size == 0) {
       // empty label? Nothing to do.
-    } else if (begins_with(label_view, U"xn--")) {
+    } else if (label_view.starts_with(U"xn--")) {
       // we do not need to check, e.g., Xn-- because mapping goes to lower case
       for (char32_t c : label_view) {
         if (c >= 0x80) {

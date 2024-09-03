@@ -1,28 +1,26 @@
-name: Lint and Format Check (Ubuntu Latest)
+name: Lint and format
 
 on:
+  pull_request:
   push:
     branches:
-      - "*"
-  pull_request:
-    branches:
-      - "*"
+      - main
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  ubuntu-build:
+  lint-and-format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3 
-      - name: Install clang-format
-        run: |
-          sudo apt update && sudo apt install clang-format-15 -y
-          sudo ln -sf /usr/bin/clang-format-15 /usr/bin/clang-format
-      - name: Build with Lint and Format Check
-        run: |
-          cmake -B build && cmake --build build
-        env:
-          CXX: clang++-14
-          LINT_AND_FORMAT_CHECK: true
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Run clang-format
+        uses: jidicula/clang-format-action@c74383674bf5f7c69f60ce562019c1c94bc1421a # v4.13.0
+        with:
+          clang-format-version: '17'
+          fallback-style: 'Google'

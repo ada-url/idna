@@ -11,7 +11,19 @@
 
 namespace ada::idna {
 
-bool constexpr is_ascii(std::u32string_view view) {
+constexpr std::array<uint8_t, 256> ascii_table = []() consteval {
+  std::array<uint8_t, 256> result{};
+  for (uint8_t i = 0; i < 255; i++) {
+    if (i >= 0x80) {
+      result[i] = 1;
+    }
+  }
+  return result;
+}();
+
+constexpr bool is_ascii_character(uint8_t c) noexcept { return ascii_table[c]; }
+
+constexpr bool is_ascii(std::u32string_view view) noexcept {
   for (uint32_t c : view) {
     if (c >= 0x80) {
       return false;
@@ -20,13 +32,12 @@ bool constexpr is_ascii(std::u32string_view view) {
   return true;
 }
 
-bool constexpr is_ascii(std::string_view view) {
+constexpr bool is_ascii(std::string_view view) noexcept {
+  bool result = true;
   for (uint8_t c : view) {
-    if (c >= 0x80) {
-      return false;
-    }
+    result |= !is_ascii_character(c);
   }
-  return true;
+  return result;
 }
 
 constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
@@ -44,13 +55,13 @@ constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
 
 static_assert(sizeof(is_forbidden_domain_code_point_table) == 256);
 
-inline bool is_forbidden_domain_code_point(const char c) noexcept {
-  return is_forbidden_domain_code_point_table[uint8_t(c)];
+constexpr bool is_forbidden_domain_code_point(const char c) noexcept {
+  return is_forbidden_domain_code_point_table[static_cast<uint8_t>(c)];
 }
 
-bool contains_forbidden_domain_code_point(std::string_view view) {
-  return (
-      std::any_of(view.begin(), view.end(), is_forbidden_domain_code_point));
+consexpr bool contains_forbidden_domain_code_point(
+    std::string_view view) noexcept {
+  return (std::ranges::any_of(view, is_forbidden_domain_code_point));
 }
 
 // We return "" on error.

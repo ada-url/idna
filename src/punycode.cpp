@@ -13,9 +13,20 @@ constexpr int32_t initial_bias = 72;
 constexpr uint32_t initial_n = 128;
 
 static constexpr int32_t char_to_digit_value(char value) {
-  if (value >= 'a' && value <= 'z') return value - 'a';
-  if (value >= '0' && value <= '9') return value - '0' + 26;
-  return -1;
+  // Convert to unsigned for defined behavior on overflow
+  auto uvalue = static_cast<unsigned char>(value);
+
+  // Check if it's a lowercase letter (a-z)
+  int32_t lowercase = (uvalue - 'a') * (uvalue >= 'a' && uvalue <= 'z');
+
+  // Check if it's a digit (0-9)
+  int32_t digit = (uvalue - '0' + 26) * (uvalue >= '0' && uvalue <= '9');
+
+  // Combine results, will be 0 if neither condition is true
+  int32_t result = lowercase | digit;
+
+  // If result is 0 and input wasn't 'a' (which would give 0), return -1
+  return result | (((result | (uvalue - 'a')) == 0) * -1);
 }
 
 static constexpr char digit_to_char(int32_t digit) {

@@ -8,14 +8,15 @@
 
 namespace ada::idna {
 
+namespace {
 // This can be greatly accelerated. For now we just use a simply
 // binary search. In practice, you should *not* do that.
-uint32_t find_range_index(uint32_t key) {
+constexpr uint32_t find_range_index(uint32_t key) {
   ////////////////
   // This could be implemented with std::lower_bound, but we roll our own
   // because we want to allow further optimizations in the future.
   ////////////////
-  uint32_t len = std::size(table);
+  constexpr uint32_t len = std::size(table);
   uint32_t low = 0;
   uint32_t high = len - 1;
   while (low <= high) {
@@ -32,10 +33,10 @@ uint32_t find_range_index(uint32_t key) {
   return low == 0 ? 0 : low - 1;
 }
 
+constexpr uint64_t broadcast(uint32_t v) { return 0x101010101010101ull * v; }
+}  // namespace
+
 bool ascii_has_upper_case(char* input, size_t length) {
-  auto broadcast = [](uint8_t v) -> uint64_t {
-    return 0x101010101010101ull * v;
-  };
   uint64_t broadcast_80 = broadcast(0x80);
   uint64_t broadcast_Ap = broadcast(128 - 'A');
   uint64_t broadcast_Zp = broadcast(128 - 'Z' - 1);
@@ -57,9 +58,6 @@ bool ascii_has_upper_case(char* input, size_t length) {
 }
 
 void ascii_map(char* input, size_t length) {
-  auto broadcast = [](uint8_t v) -> uint64_t {
-    return 0x101010101010101ull * v;
-  };
   uint64_t broadcast_80 = broadcast(0x80);
   uint64_t broadcast_Ap = broadcast(128 - 'A');
   uint64_t broadcast_Zp = broadcast(128 - 'Z' - 1);
@@ -102,8 +100,7 @@ std::u32string map(std::u32string_view input) {
   for (char32_t x : input) {
     size_t index = find_range_index(x);
     uint32_t descriptor = table[index][1];
-    uint8_t code = uint8_t(descriptor);
-    switch (code) {
+    switch (static_cast<uint8_t>(descriptor)) {
       case 0:
         break;  // nothing to do, ignored
       case 1:
@@ -116,7 +113,8 @@ std::u32string map(std::u32string_view input) {
         // We have a mapping
         {
           size_t char_count = (descriptor >> 24);
-          uint16_t char_index = uint16_t(descriptor >> 8);
+          auto char_index = uint16_t(descriptor >> 8);
+          answer.reserve(answer.size() + char_index);
           for (size_t idx = char_index; idx < char_index + char_count; idx++) {
             answer.push_back(mappings[idx]);
           }

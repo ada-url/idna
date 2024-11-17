@@ -3,6 +3,16 @@
 
 namespace ada::idna {
 
+namespace {
+
+constexpr uint8_t get_ccc(char32_t c) noexcept {
+  return c < 0x110000 ? canonical_combining_class_block
+                            [canonical_combining_class_index[c >> 8]][c % 256]
+                      : 0;
+}
+
+}  // namespace
+
 // See
 // https://github.com/uni-algo/uni-algo/blob/c612968c5ed3ace39bde4c894c24286c5f2c7fe2/include/uni_algo/impl/impl_norm.h#L467
 constexpr char32_t hangul_sbase = 0xAC00;
@@ -86,12 +96,6 @@ void decompose(std::u32string& input, size_t additional_elements) {
       input[--descending_idx] = input[input_count];
     }
   }
-}
-
-uint8_t get_ccc(char32_t c) noexcept {
-  return c < 0x110000 ? canonical_combining_class_block
-                            [canonical_combining_class_index[c >> 8]][c % 256]
-                      : 0;
 }
 
 void sort_marks(std::u32string& input) {

@@ -11,22 +11,12 @@
 
 namespace ada::idna {
 
-bool constexpr is_ascii(std::u32string_view view) {
-  for (uint32_t c : view) {
-    if (c >= 0x80) {
-      return false;
-    }
-  }
-  return true;
+constexpr bool is_ascii(std::u32string_view view) {
+  return std::ranges::all_of(view, [](auto c) { return c < 0x80; });
 }
 
-bool constexpr is_ascii(std::string_view view) {
-  for (uint8_t c : view) {
-    if (c >= 0x80) {
-      return false;
-    }
-  }
-  return true;
+constexpr bool is_ascii(std::string_view view) {
+  return std::ranges::all_of(view, [](auto c) { return c < 0x80; });
 }
 
 constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
@@ -44,18 +34,18 @@ constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
 
 static_assert(sizeof(is_forbidden_domain_code_point_table) == 256);
 
-inline bool is_forbidden_domain_code_point(const char c) noexcept {
-  return is_forbidden_domain_code_point_table[uint8_t(c)];
+constexpr bool is_forbidden_domain_code_point(const char c) noexcept {
+  return is_forbidden_domain_code_point_table[static_cast<uint8_t>(c)];
 }
 
-bool contains_forbidden_domain_code_point(std::string_view view) {
-  return (
-      std::any_of(view.begin(), view.end(), is_forbidden_domain_code_point));
+constexpr bool contains_forbidden_domain_code_point(
+    std::string_view view) noexcept {
+  return (std::ranges::any_of(view, is_forbidden_domain_code_point));
 }
 
 // We return "" on error.
 static std::string from_ascii_to_ascii(std::string_view ut8_string) {
-  static const std::string error = "";
+  static const std::string error;
   // copy and map
   // we could be more efficient by avoiding the copy when unnecessary.
   std::string mapped_string = std::string(ut8_string);
@@ -114,7 +104,7 @@ std::string to_ascii(std::string_view ut8_string) {
   if (is_ascii(ut8_string)) {
     return from_ascii_to_ascii(ut8_string);
   }
-  static const std::string error = "";
+  static const std::string error;
   // We convert to UTF-32
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
@@ -152,8 +142,7 @@ std::string to_ascii(std::string_view ut8_string) {
           out.data() + out.size() - label_view.size() + 4,
           label_view.size() - 4);
       std::u32string tmp_buffer;
-      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
-      if (!is_ok) {
+      if (!ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer)) {
         return error;
       }
       std::u32string post_map = ada::idna::map(tmp_buffer);
@@ -174,6 +163,7 @@ std::string to_ascii(std::string_view ut8_string) {
     } else {
       // The fast path here is an ascii label.
       if (is_ascii(label_view)) {
+        out.reserve(out.size() + label_view.size());
         // no validation needed.
         for (char32_t c : label_view) {
           out += (unsigned char)(c);
@@ -186,8 +176,7 @@ std::string to_ascii(std::string_view ut8_string) {
         }
         // It is valid! So now we must encode it as punycode...
         out.append("xn--");
-        bool is_ok = ada::idna::utf32_to_punycode(label_view, out);
-        if (!is_ok) {
+        if (!ada::idna::utf32_to_punycode(label_view, out)) {
           return error;
         }
       }

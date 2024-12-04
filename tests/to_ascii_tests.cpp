@@ -55,6 +55,9 @@ bool test(std::string ut8_string, std::string puny_string) {
 }
 
 bool special_cases() {
+  if (ada::idna::to_ascii("\u1E9E") != "xn--zca") {
+    return false;
+  }
   if (!ada::idna::to_ascii("\u00AD").empty()) {
     return false;
   }
@@ -112,5 +115,6 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+  printf("SUCCESS\n");
   return EXIT_SUCCESS;
 }

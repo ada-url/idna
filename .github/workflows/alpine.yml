@@ -20,8 +20,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
       - name: Install extra dependencies
-        if: ${{ matrix.config.arch != '' }}
-        shell: 'sh'
         run: |
           sudo apt update && sudo apt install -y binfmt-support
       - name: Install latest Alpine Linux for ${{ matrix.arch }}

@@ -55,6 +55,9 @@ bool test(std::string ut8_string, std::string puny_string) {
 }
 
 bool special_cases() {
+  if (!ada::idna::to_ascii("\xf0\xaf\xa1\xa8").empty()) {
+    return false;
+  }
   // We would prefer "\u1E9E" but Visual Studio complains.
   if (ada::idna::to_ascii("\xe1\xba\x9e") != "xn--zca") {
     return false;

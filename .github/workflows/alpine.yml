@@ -19,7 +19,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v1
-
+      - name: Install extra dependencies
+        run: |
+          sudo apt update && sudo apt install -y binfmt-support
       - name: Install latest Alpine Linux for ${{ matrix.arch }}
         uses: jirutka/setup-alpine@v1
         with:

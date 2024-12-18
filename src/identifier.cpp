@@ -1,5 +1,4 @@
 #include "ada/idna/identifier.h"
-#include <_types/_uint32_t.h>
 
 #include <algorithm>
 #include <array>

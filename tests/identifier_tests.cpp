@@ -11,14 +11,14 @@ void verify(std::string_view input, bool first, bool expected) {
 
 int main(int argc, char **argv) {
   verify("a", true, true);
-    verify("é", true, true);
-    verify("A", true, true);
-    verify("0", true, false);
-    verify("a", false, true);
-    verify("A", false, true);
-    verify("À", false, true);
-    verify("0", false, true);
-    verify(" ", false, false);
+  verify("é", true, true);
+  verify("A", true, true);
+  verify("0", true, false);
+  verify("a", false, true);
+  verify("A", false, true);
+  verify("À", false, true);
+  verify("0", false, true);
+  verify(" ", false, false);
 
   std::cout << "SUCCESS" << std::endl;
   return EXIT_SUCCESS;

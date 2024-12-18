@@ -5,3 +5,4 @@
 #include "validity.cpp"
 #include "to_ascii.cpp"
 #include "to_unicode.cpp"
+#include "identifier.cpp"

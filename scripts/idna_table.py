@@ -59,7 +59,6 @@ def get_table():
     with open(filename, 'r') as file:
        return file.read()
 
-
 def get_version(table_data):
     return re.search("# Version: (.*)", table_data).group(1)
 
@@ -81,7 +80,7 @@ def values(words):
     return answer
 
 UseSTD3ASCIIRules=False
-if __name__ == "__main__":
+def print_idna():
     table_data = get_table()
     print("// IDNA ", get_version(get_table()))
     words = []
@@ -121,13 +120,16 @@ if __name__ == "__main__":
 #include <cstdint>
 
 namespace ada::idna {
-    """)
-    print("const uint32_t mappings["+str(len(long_mapped))+"] = ")
+""")
+    print("const uint32_t mappings["+str(len(long_mapped))+"] =")
     print(multiline_cpp_array_initializer(long_mapped), end=";\n")
-    print("const uint32_t table["+str(len(words))+"][2] = ")
+    print("const uint32_t table["+str(len(words))+"][2] =")
     print(cpp_arrayarray_initializer(values(words)), end=";\n")
     print("""
 
 } // namespace ada::idna
 #endif // ADA_IDNA_TABLES_H
-    """)
+""")
+
+if __name__ == "__main__":
+    print_idna()

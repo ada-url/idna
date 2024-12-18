@@ -8,6 +8,7 @@ link_libraries(ada-idna)
 add_cpp_test(punycode_tests)
 add_cpp_test(to_ascii_tests)
 add_cpp_test(mapping_tests)
+add_cpp_test(identifier_tests)
 add_cpp_test(to_unicode_tests)
 add_cpp_test(wpt_tests)
 

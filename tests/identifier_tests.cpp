@@ -1,9 +1,24 @@
 #include <iostream>
 
-#include "ada/idna/identifier.h"
+#include "idna.h"
+
+std::u32string to_utf32(std::string_view ut8_string) {
+  size_t utf32_length =
+      ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
+  std::u32string utf32(utf32_length, '\0');
+  size_t actual_utf32_length = ada::idna::utf8_to_utf32(
+      ut8_string.data(), ut8_string.size(), utf32.data());
+  return utf32;
+}
 
 void verify(std::string_view input, bool first, bool expected) {
-  if (ada::idna::valid_name_code_point(input, first) != expected) {
+  std::u32string first_code_point = to_utf32(input);
+  if (first_code_point.empty()) {
+    std::cerr << "bug" << input << std::endl;
+    exit(-1);
+  }
+  if (ada::idna::valid_name_code_point(first_code_point[0], first) !=
+      expected) {
     std::cerr << "bug" << input << std::endl;
     exit(-1);
   }

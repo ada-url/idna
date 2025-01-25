@@ -20,7 +20,7 @@ bool file_exists(std::string_view filename) {
   }
 }
 
-std::string read_file(std::string filename) {
+std::string read_file(const std::string& filename) {
   constexpr auto read_size = std::size_t(4096);
   auto stream = std::ifstream(filename.c_str());
   stream.exceptions(std::ios_base::badbit);
@@ -42,7 +42,7 @@ std::vector<std::string> split_string(const std::string& str) {
   return result;
 }
 
-bool test(std::string ut8_string, std::string puny_string) {
+bool test(const std::string& ut8_string, const std::string& puny_string) {
   std::cout << "processing " << puny_string << std::endl;
   // first check that we can go to UTF-32 and and back.
   size_t utf32_length =

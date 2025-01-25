@@ -9,7 +9,7 @@ namespace ada::idna {
 size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
   const uint8_t* data = reinterpret_cast<const uint8_t*>(buf);
   size_t pos = 0;
-  char32_t* start{utf32_output};
+  const char32_t* start{utf32_output};
   while (pos < len) {
     // try to convert the next block of 16 ASCII bytes
     if (pos + 16 <= len) {  // if it is safe to read 16 more
@@ -128,7 +128,7 @@ size_t utf32_length_from_utf8(const char* buf, size_t len) {
 size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {
   const uint32_t* data = reinterpret_cast<const uint32_t*>(buf);
   size_t pos = 0;
-  char* start{utf8_output};
+  const char* start{utf8_output};
   while (pos < len) {
     // try to convert the next block of 2 ASCII characters
     if (pos + 2 <= len) {  // if it is safe to read 8 more

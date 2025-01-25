@@ -37,13 +37,12 @@ bool idna_test_v2_to_ascii(std::string_view filename) {
     ondemand::object object = element.get_object();
     auto json_string =
         std::string(std::string_view(simdjson::to_json_string(object)));
-
-    try {
-      auto comment = object["comment"];
-      if (comment) {
-        std::cout << "   comment: " << comment.get_string() << std::endl;
+    ondemand::value comment;
+    if (!object["comment"].get(comment)) {
+      std::string_view comment_string;
+      if (!comment.get_string().get(comment_string)) {
+        std::cout << "  comment: " << comment.get_string() << std::endl;
       }
-    } catch (simdjson::simdjson_error ignored) {
     }
 
     std::string_view input = object["input"].get_string();

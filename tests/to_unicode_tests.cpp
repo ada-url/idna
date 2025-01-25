@@ -20,7 +20,7 @@ bool file_exists(std::string_view filename) {
   }
 }
 
-std::string read_file(std::string filename) {
+std::string read_file(const std::string& filename) {
   constexpr auto read_size = std::size_t(4096);
   auto stream = std::ifstream(filename.c_str());
   stream.exceptions(std::ios_base::badbit);
@@ -42,7 +42,7 @@ std::vector<std::string> split_string(const std::string& str) {
   return result;
 }
 
-bool test(std::string input, std::string output) {
+bool test(std::string input, const std::string& output) {
   std::cout << "processing " << input << std::endl;
   auto processed = ada::idna::to_unicode(input);
   if (processed != output) {

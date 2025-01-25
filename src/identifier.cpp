@@ -7,52 +7,6 @@
 #include "id_tables.cpp"
 
 namespace ada::idna {
-// return 0xffffffff in case of error
-// We do not fully validate the input
-uint32_t get_first_code_point(std::string_view input) {
-  constexpr uint32_t error = 0xffffffff;
-  // Check if the input is empty
-  if (input.empty()) {
-    return error;
-  }
-
-  uint32_t code_point = 0;
-  size_t number_bytes = 0;
-  unsigned char first_byte = input[0];
-
-  if ((first_byte & 0x80) == 0) {
-    // 1-byte character (ASCII)
-    return first_byte;
-  } else if ((first_byte & 0xE0) == 0xC0) {
-    // 2-byte character
-    code_point = first_byte & 0x1F;
-    number_bytes = 2;
-  } else if ((first_byte & 0xF0) == 0xE0) {
-    // 3-byte character
-    code_point = first_byte & 0x0F;
-    number_bytes = 3;
-  } else if ((first_byte & 0xF8) == 0xF0) {
-    // 4-byte character
-    code_point = first_byte & 0x07;
-    number_bytes = 4;
-  } else {
-    return error;
-  }
-
-  // Decode the remaining bytes
-  for (size_t i = 1; i < number_bytes; ++i) {
-    if (i >= input.size()) {
-      return error;
-    }
-    unsigned char byte = input[i];
-    if ((byte & 0xC0) != 0x80) {
-      return error;
-    }
-    code_point = (code_point << 6) | (byte & 0x3F);
-  }
-  return code_point;
-}
-
 bool is_ascii_letter(char c) {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }

@@ -43,7 +43,8 @@ bool idna_test_v2_to_ascii(std::string_view filename) {
       if (comment) {
         std::cout << "   comment: " << comment.get_string() << std::endl;
       }
-    } catch (simdjson::simdjson_error ignored) {
+    } catch (const simdjson::simdjson_error& ignored) {
+      std::cout << "   JSON error while parsing comment" << std::endl;
     }
 
     std::string_view input = object["input"].get_string();

@@ -6,7 +6,7 @@ std::u32string to_utf32(std::string_view ut8_string) {
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   std::u32string utf32(utf32_length, '\0');
-  size_t actual_utf32_length = ada::idna::utf8_to_utf32(
+  ada::idna::utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
   return utf32;
 }

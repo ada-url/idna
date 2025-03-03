@@ -1,6 +1,6 @@
+#include "gtest/gtest.h"
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -9,116 +9,101 @@
 #include "ada/idna/to_ascii.h"
 #include "ada/idna/unicode_transcoding.h"
 
-bool file_exists(std::string_view filename) {
-  namespace fs = std::filesystem;
-  std::filesystem::path f{filename};
-  if (std::filesystem::exists(filename)) {
-    std::cout << "  file found: " << filename << std::endl;
-    return true;
-  } else {
-    std::cout << "  file missing: " << filename << std::endl;
-    return false;
-  }
-}
-
-std::string read_file(const std::string& filename) {
-  constexpr auto read_size = std::size_t(4096);
-  auto stream = std::ifstream(filename.c_str());
-  stream.exceptions(std::ios_base::badbit);
-  auto out = std::string();
-  auto buf = std::string(read_size, '\0');
-  while (stream.read(&buf[0], read_size)) {
+class IdnaFileTest : public ::testing::Test {
+ protected:
+  // Helper function to read a file
+  static std::string ReadFile(const std::string& filename) {
+    constexpr auto read_size = std::size_t(4096);
+    auto stream = std::ifstream(filename.c_str());
+    stream.exceptions(std::ios_base::badbit);
+    auto out = std::string();
+    auto buf = std::string(read_size, '\0');
+    while (stream.read(&buf[0], read_size)) {
+      out.append(buf, 0, size_t(stream.gcount()));
+    }
     out.append(buf, 0, size_t(stream.gcount()));
-  }
-  out.append(buf, 0, size_t(stream.gcount()));
-  return out;
-}
-
-std::vector<std::string> split_string(const std::string& str) {
-  auto result = std::vector<std::string>{};
-  auto ss = std::stringstream{str};
-  for (std::string line; std::getline(ss, line, '\n');) {
-    result.push_back(line);
-  }
-  return result;
-}
-
-bool test(std::string ut8_string, const std::string& puny_string) {
-  std::cout << "processing " << puny_string << std::endl;
-  auto processed = ada::idna::to_ascii(ut8_string);
-  if (processed != puny_string) {
-    std::cout << "got " << processed << std::endl;
-    std::cout << "expected " << puny_string << std::endl;
-    return false;
-  }
-  return true;
-}
-
-bool special_cases() {
-  if (!ada::idna::to_ascii("\xf0\xaf\xa1\xa8").empty()) {
-    return false;
-  }
-  // We would prefer "\u1E9E" but Visual Studio complains.
-  if (ada::idna::to_ascii("\xe1\xba\x9e") != "xn--zca") {
-    return false;
-  }
-  if (!ada::idna::to_ascii("\u00AD").empty()) {
-    return false;
-  }
-  if (!ada::idna::to_ascii("\xef\xbf\xbd.com").empty()) {
-    return false;
-  }
-  return true;
-}
-
-bool comma_test() {
-  if (ada::idna::to_ascii("128.0,0.1").empty()) {
-    return false;
-  }
-  return true;
-}
-
-int main(int argc, char** argv) {
-  if (!comma_test()) {
-    return EXIT_FAILURE;
-  }
-  if (!special_cases()) {
-    return EXIT_FAILURE;
-  }
-  std::string filename = "fixtures/to_ascii_alternating.txt";
-  if (argc > 1) {
-    filename = argv[1];
+    return out;
   }
 
-  if (!file_exists(filename)) {
-    return EXIT_FAILURE;
+  // Helper function to split a string by newlines
+  static std::vector<std::string> SplitString(const std::string& str) {
+    auto result = std::vector<std::string>{};
+    auto ss = std::stringstream{str};
+    for (std::string line; std::getline(ss, line, '\n');) {
+      result.push_back(line);
+    }
+    return result;
   }
-  std::string buffer = read_file(filename);
-  std::vector<std::string> lines = split_string(buffer);
+
+  // Set default filenames that can be overridden in tests
+  std::string alternating_filename = "fixtures/to_ascii_alternating.txt";
+  std::string invalid_filename = "fixtures/to_ascii_invalid.txt";
+};
+
+// Test for valid ASCII conversions from file
+TEST_F(IdnaFileTest, AlternatingFileConversions) {
+  // Skip test if file doesn't exist
+  if (!std::filesystem::exists(alternating_filename)) {
+    GTEST_SKIP() << "Test file not found: " << alternating_filename;
+  }
+
+  std::string buffer = ReadFile(alternating_filename);
+  std::vector<std::string> lines = SplitString(buffer);
+
+  ASSERT_GT(lines.size(), 1) << "File must contain at least 2 lines";
+
   for (size_t i = 0; i + 1 < lines.size(); i += 2) {
-    std::string ut8_string = lines[i];
-    std::string puny_string = lines[i + 1];
-    if (!test(ut8_string, puny_string)) {
-      return EXIT_FAILURE;
-    }
+    const std::string& utf8_string = lines[i];
+    const std::string& puny_string = lines[i + 1];
+
+    SCOPED_TRACE("Line " + std::to_string(i) + ": " + utf8_string);
+
+    std::string processed = ada::idna::to_ascii(utf8_string);
+    EXPECT_EQ(processed, puny_string)
+        << "Conversion failed for '" << utf8_string << "'"
+        << "\nExpected: " << puny_string << "\nGot: " << processed;
   }
-  filename = "fixtures/to_ascii_invalid.txt";
-  if (argc > 2) {
-    filename = argv[2];
+}
+
+// Test for invalid conversions from file
+TEST_F(IdnaFileTest, InvalidFileConversions) {
+  // Skip test if file doesn't exist
+  if (!std::filesystem::exists(invalid_filename)) {
+    GTEST_SKIP() << "Test file not found: " << invalid_filename;
   }
 
-  if (!file_exists(filename)) {
-    return EXIT_FAILURE;
-  }
-  buffer = read_file(filename);
-  lines = split_string(buffer);
+  std::string buffer = ReadFile(invalid_filename);
+  std::vector<std::string> lines = SplitString(buffer);
+
   for (size_t i = 0; i < lines.size(); i++) {
-    std::string ut8_string = lines[i];
-    if (!ada::idna::to_ascii(ut8_string).empty()) {
-      std::cout << "Should have failed: " << ut8_string << std::endl;
-      return EXIT_FAILURE;
-    }
+    const std::string& utf8_string = lines[i];
+
+    SCOPED_TRACE("Line " + std::to_string(i) + ": " + utf8_string);
+
+    EXPECT_TRUE(ada::idna::to_ascii(utf8_string).empty())
+        << "Should have failed for invalid input: " << utf8_string;
   }
-  printf("SUCCESS\n");
-  return EXIT_SUCCESS;
+}
+
+TEST(to_ascii_tests, special_cases) {
+  // Test case for Tangut ideograph U+17E68 (𗹨)
+  ASSERT_TRUE(ada::idna::to_ascii("\xf0\xaf\xa1\xa8").empty())
+      << "Tangut ideograph should result in empty string";
+
+  // Test case for German capital sharp S (ẞ)
+  // We would prefer "\u1E9E" but Visual Studio complains.
+  ASSERT_EQ(ada::idna::to_ascii("\xe1\xba\x9e"), "xn--zca")
+      << "German capital sharp S should convert to expected Punycode";
+
+  // Test case for soft hyphen (U+00AD)
+  ASSERT_TRUE(ada::idna::to_ascii("\u00AD").empty())
+      << "Soft hyphen should result in empty string";
+
+  // Test case for replacement character (U+FFFD)
+  ASSERT_TRUE(ada::idna::to_ascii("\xef\xbf\xbd.com").empty())
+      << "Replacement character in domain should result in empty string";
+}
+
+TEST(to_ascii_tests, comma_test) {
+  ASSERT_FALSE(ada::idna::to_ascii("128.0,0.1").empty());
 }

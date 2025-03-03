@@ -34,3 +34,7 @@
 .fleet
 build
 .cache
+
+singleheader/ada_idna.cpp
+singleheader/ada_idna.h
+singleheader/singleheader.zip

@@ -1,6 +1,6 @@
-
 option(ADA_SANITIZE "Sanitize addresses" OFF)
 option(ADA_SANITIZE_UNDEFINED "Sanitize undefined behaviour" OFF)
+option(ADA_IDNA_BENCHMARKS "Build benchmarks" OFF)
 if(ADA_SANITIZE)
   message(STATUS "Address sanitizer enabled.")
 endif()

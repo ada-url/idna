@@ -7,11 +7,11 @@
 #include "id_tables.cpp"
 
 namespace ada::idna {
-bool is_ascii_letter(char c) {
+constexpr bool is_ascii_letter(char32_t c) noexcept {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-bool is_ascii_letter_or_digit(char c) {
+constexpr bool is_ascii_letter_or_digit(char32_t c) noexcept {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
          (c >= '0' && c <= '9');
 }

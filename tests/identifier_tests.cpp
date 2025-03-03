@@ -1,39 +1,41 @@
+#include "gtest/gtest.h"
 #include <iostream>
 
 #include "idna.h"
 
-std::u32string to_utf32(std::string_view ut8_string) {
-  size_t utf32_length =
-      ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
-  std::u32string utf32(utf32_length, '\0');
-  ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(), utf32.data());
-  return utf32;
+class IdnaTest : public testing::Test {
+ protected:
+  static std::u32string to_utf32(std::string_view ut8_string) {
+    size_t utf32_length =
+        ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
+    std::u32string utf32(utf32_length, '\0');
+    ada::idna::utf8_to_utf32(ut8_string.data(), ut8_string.size(),
+                             utf32.data());
+    return utf32;
+  }
+
+  // Helper method to verify code points
+  static void VerifyCodePoint(std::string_view input, bool first,
+                              bool expected) {
+    std::u32string code_points = to_utf32(input);
+    ASSERT_FALSE(code_points.empty()) << "Failed to convert: " << input;
+    ASSERT_EQ(ada::idna::valid_name_code_point(code_points[0], first), expected)
+        << "Test failed for input: " << input << ", first: " << std::boolalpha
+        << first;
+  }
+};
+
+TEST_F(IdnaTest, FirstPositionCodePoints) {
+  VerifyCodePoint("a", true, true);
+  VerifyCodePoint("é", true, true);
+  VerifyCodePoint("A", true, true);
+  VerifyCodePoint("0", true, false);
 }
 
-void verify(std::string_view input, bool first, bool expected) {
-  std::u32string first_code_point = to_utf32(input);
-  if (first_code_point.empty()) {
-    std::cerr << "bug" << input << std::endl;
-    exit(-1);
-  }
-  if (ada::idna::valid_name_code_point(first_code_point[0], first) !=
-      expected) {
-    std::cerr << "bug" << input << std::endl;
-    exit(-1);
-  }
-}
-
-int main(int argc, char **argv) {
-  verify("a", true, true);
-  verify("é", true, true);
-  verify("A", true, true);
-  verify("0", true, false);
-  verify("a", false, true);
-  verify("A", false, true);
-  verify("À", false, true);
-  verify("0", false, true);
-  verify(" ", false, false);
-
-  std::cout << "SUCCESS" << std::endl;
-  return EXIT_SUCCESS;
+TEST_F(IdnaTest, OtherPositionCodePoints) {
+  VerifyCodePoint("a", false, true);
+  VerifyCodePoint("A", false, true);
+  VerifyCodePoint("À", false, true);
+  VerifyCodePoint("0", false, true);
+  VerifyCodePoint(" ", false, false);
 }

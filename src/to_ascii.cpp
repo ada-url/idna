@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <ranges>
 
 #include "ada/idna/mapping.h"
 #include "ada/idna/normalization.h"
@@ -49,8 +50,7 @@ inline bool is_forbidden_domain_code_point(const char c) noexcept {
 }
 
 bool contains_forbidden_domain_code_point(std::string_view view) {
-  return (
-      std::any_of(view.begin(), view.end(), is_forbidden_domain_code_point));
+  return std::ranges::any_of(view, is_forbidden_domain_code_point);
 }
 
 // We return "" on error.

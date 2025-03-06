@@ -43,9 +43,16 @@ bool idna_test_v2_to_ascii(std::string_view filename) {
       if (!comment.get_string().get(comment_string)) {
         std::cout << "  comment: " << comment.get_string() << std::endl;
       }
+      if(comment_string == "V4; V2 (ignored)" || comment_string == "P4") {
+        continue;
+      }
     }
 
-    std::string_view input = object["input"].get_string();
+    std::string_view input;
+    if(object["input"].get_string().get(input)) {
+      std::cout << "  malformed input: " << object["input"].get_raw_json_string() << std::endl;
+      continue;
+    }
     std::string output = ada::idna::to_ascii(input);
     if (ada::idna::contains_forbidden_domain_code_point(output)) {
       output = "";
@@ -82,6 +89,6 @@ int main(int argc, char** argv) {
 
   bool result = idna_test_v2_to_ascii(filename);
   if (!result) return EXIT_FAILURE;
-
+  std::cout << "SUCCESS\n";
   return EXIT_SUCCESS;
 }

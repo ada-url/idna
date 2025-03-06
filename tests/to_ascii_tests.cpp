@@ -84,7 +84,7 @@ TEST_F(IdnaFileTest, InvalidFileConversions) {
         << "Should have failed for invalid input: " << utf8_string;
   }
 }
-
+#define UNICODE16 0
 TEST(to_ascii_tests, special_cases) {
   // Test case for Tangut ideograph U+17E68 (𗹨)
 #ifdef UNICODE16

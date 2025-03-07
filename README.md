@@ -1,5 +1,5 @@
 # Unicode IDNA
-![OpenSSF Scorecard Badge](https://api.securityscorecards.dev/projects/github.com/ada-url/idna/badge)
+[![OpenSSF Scorecard Badge](https://api.securityscorecards.dev/projects/github.com/ada-url/idna/badge)](https://ossf.github.io/scorecard-visualizer/#/projects/github.com/ada-url/idna)
 [![VS17-CI](https://github.com/ada-url/idna/actions/workflows/vs.yml/badge.svg)](https://github.com/ada-url/idna/actions/workflows/vs.yml)
 [![Alpine Linux](https://github.com/ada-url/idna/actions/workflows/alpine.yml/badge.svg)](https://github.com/ada-url/idna/actions/workflows/alpine.yml)
 [![Alpine Linux](https://github.com/ada-url/idna/actions/workflows/alpine.yml/badge.svg)](https://github.com/ada-url/idna/actions/workflows/alpine.yml)

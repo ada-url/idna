@@ -88,8 +88,8 @@ TEST_F(IdnaTestV2, ToAscii) {
 #else
       std::cout
 #endif
-       << "Failed to get input string: " << e.what()
-                    << " for test case: " << json_string;
+          << "Failed to get input string: " << e.what()
+          << " for test case: " << json_string;
       continue;
     }
 

@@ -39,7 +39,7 @@ static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
 
 bool punycode_to_utf32(std::string_view input, std::u32string &out) {
   // See https://github.com/whatwg/url/issues/803
-  if(input.starts_with("xn--")) {
+  if (input.starts_with("xn--")) {
     return false;
   }
   int32_t written_out{0};
@@ -102,7 +102,7 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
 }
 
 bool verify_punycode(std::string_view input) {
-  if(input.starts_with("xn--")) {
+  if (input.starts_with("xn--")) {
     return false;
   }
   size_t written_out{0};

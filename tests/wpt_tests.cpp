@@ -70,7 +70,8 @@ TEST_F(IdnaTestV2, ToAscii) {
     if (object["comment"].get(comment) == simdjson::SUCCESS) {
       std::string_view comment_string;
       if (comment.get_string().get(comment_string) == simdjson::SUCCESS) {
-        std::cout << "  comment: " << comment_string << std::endl;
+        // Doesn't see useful to print all comments:
+        // std::cout << "  comment: " << comment_string << std::endl;
       }
     }
 

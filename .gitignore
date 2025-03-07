@@ -38,3 +38,6 @@ build
 singleheader/ada_idna.cpp
 singleheader/ada_idna.h
 singleheader/singleheader.zip
+
+.idea
+cmake-build-debug

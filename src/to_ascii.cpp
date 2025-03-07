@@ -84,6 +84,12 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
       if (!is_ok) {
         return error;
       }
+      // If the input is just ASCII, it should not have been encoded
+      // as punycode.
+      // https://github.com/whatwg/url/issues/760
+      if (is_ascii(tmp_buffer)) {
+        return error;
+      }
       std::u32string post_map = ada::idna::map(tmp_buffer);
       if (tmp_buffer != post_map) {
         return error;
@@ -154,6 +160,12 @@ std::string to_ascii(std::string_view ut8_string) {
       std::u32string tmp_buffer;
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       if (!is_ok) {
+        return error;
+      }
+      // If the input is just ASCII, it should not have been encoded
+      // as punycode.
+      // https://github.com/whatwg/url/issues/760
+      if (is_ascii(tmp_buffer)) {
         return error;
       }
       std::u32string post_map = ada::idna::map(tmp_buffer);

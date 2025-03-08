@@ -168,11 +168,11 @@ void compose(std::u32string& input) {
 
         if (composition[1] != composition[0] && previous_ccc < ccc) {
           // Try finding a composition.
-          uint16_t left = composition[0];
-          uint16_t right = composition[1];
+          int left = composition[0];
+          int right = composition[1];
           while (left + 2 < right) {
             // mean without overflow
-            uint16_t middle = left + (((right - left) >> 1) & ~1);
+            int middle = left + (((right - left) >> 1) & ~1);
             if (composition_data[middle] <= input[input_count + 1]) {
               left = middle;
             }

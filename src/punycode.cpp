@@ -174,7 +174,7 @@ bool utf32_to_punycode(std::u32string_view input, std::string &out) {
       ++h;
       out.push_back(char(c));
     }
-    if (c > 0x10ffff || (c >= 0xd880 && c < 0xe000)) {
+    if (c > 0x10ffff || (c >= 0xd800 && c < 0xe000)) {
       return false;
     }
   }

@@ -10,6 +10,10 @@
 #include "ada/idna/unicode_transcoding.h"
 #include "ada/idna/validity.h"
 
+#ifdef ADA_USE_SIMDUTF
+#include "simdutf.h"
+#endif
+
 namespace ada::idna {
 
 bool constexpr is_ascii(std::u32string_view view) {
@@ -122,11 +126,20 @@ std::string to_ascii(std::string_view ut8_string) {
   }
   static const std::string error = "";
   // We convert to UTF-32
+
+#ifdef ADA_USE_SIMDUTF
+  size_t utf32_length =
+      simdutf::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
+  std::u32string utf32(utf32_length, '\0');
+  size_t actual_utf32_length = simdutf::convert_utf8_to_utf32(
+      ut8_string.data(), ut8_string.size(), utf32.data());
+#else
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   std::u32string utf32(utf32_length, '\0');
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
+#endif
   if (actual_utf32_length == 0) {
     return error;
   }

@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.16)
 project(ada-idna
   DESCRIPTION "IDNA"
   LANGUAGES C CXX
-  VERSION 0.3.3
+  VERSION 0.3.4
 )
-set(ADA_IDNA_LIB_VERSION "0.3.3" CACHE STRING "ada-idna library version")
+set(ADA_IDNA_LIB_VERSION "0.3.4" CACHE STRING "ada-idna library version")
 set(ADA_IDNA_LIB_SOVERSION "0" CACHE STRING "ada-idna library soversion")
 
 include(GNUInstallDirs)

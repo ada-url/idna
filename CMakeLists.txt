@@ -14,8 +14,20 @@ include(cmake/idna-flags.cmake)
 
 add_subdirectory(src)
 
+option(ADA_USE_SIMDUTF "Whether to use SIMDUTF for unicode transcoding" OFF)
+
 if(ADA_IDNA_BENCHMARKS OR BUILD_TESTING)
   include(cmake/CPM.cmake)
+endif()
+
+if(ADA_USE_SIMDUTF)
+  include(cmake/CPM.cmake)
+  CPMAddPackage(
+    NAME simdutf
+    GITHUB_REPOSITORY simdutf/simdutf
+    VERSION 7.0.0
+    OPTIONS "SIMDUTF_TESTS OFF"
+  )
 endif()
 
 if (ADA_IDNA_BENCHMARKS)

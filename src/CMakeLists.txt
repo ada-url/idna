@@ -11,6 +11,11 @@ target_compile_features(ada-idna PUBLIC cxx_std_20)
 target_include_directories(ada-idna PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> )
 target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
 
+if(ADA_USE_SIMDUTF)
+  target_link_libraries(ada-idna PRIVATE simdutf)
+  target_compile_definitions(ada-idna PRIVATE ADA_USE_SIMDUTF)
+endif()
+
 if(MSVC)
   if("${MSVC_TOOLSET_VERSION}" STREQUAL "140")
     target_compile_options(ada INTERFACE /W0 /sdl)

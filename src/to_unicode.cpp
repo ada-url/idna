@@ -30,8 +30,8 @@ std::string to_unicode(std::string_view input) {
         std::u32string tmp_buffer;
         if (ada::idna::punycode_to_utf32(label_view, tmp_buffer)) {
 #ifdef ADA_USE_SIMDUTF
-          auto utf8_size : size_t simdutf::utf8_length_from_utf32(
-                               tmp_buffer.data(), tmp_buffer.size());
+          auto utf8_size = simdutf::utf8_length_from_utf32(tmp_buffer.data(),
+                                                           tmp_buffer.size());
           std::string final_utf8(utf8_size, '\0');
           simdutf::convert_utf32_to_utf8(tmp_buffer.data(), tmp_buffer.size(),
                                          final_utf8.data());

@@ -52,10 +52,10 @@ if (BUILD_TESTING)
   CPMAddPackage(
     NAME GTest
     GITHUB_REPOSITORY google/googletest
-    VERSION 1.15.2
+    VERSION 1.17.0
     OPTIONS  "BUILD_GMOCK OFF" "INSTALL_GTEST OFF"
   )
-  CPMAddPackage("gh:simdjson/simdjson@3.10.1")
+  CPMAddPackage("gh:simdjson/simdjson@4.0.6")
   add_subdirectory(tests)
 else()
   if(is_top_project)

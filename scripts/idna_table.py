@@ -49,7 +49,7 @@ def cpp_arrayarray_initializer(arr):
     alllines += '\n}'
     return alllines
 
-url = "https://www.unicode.org/Public/idna/16.0.0/IdnaMappingTable.txt"
+url = "https://www.unicode.org/Public/idna/latest/IdnaMappingTable.txt"
 filename = "IdnaMappingTable.txt"
 def get_table():
     if(not os.path.exists(filename)):

@@ -50,7 +50,7 @@ def cpp_arrayarray_initializer(arr):
     return alllines
 
 
-urlderived = "https://www.unicode.org/Public/16.0.0/ucd/DerivedCoreProperties.txt"
+urlderived = "https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt"
 derivedfilename = "DerivedCoreProperties.txt"
 def get_derived_table():
     if(not os.path.exists(derivedfilename)):

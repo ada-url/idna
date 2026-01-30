@@ -109,3 +109,33 @@ TEST(to_ascii_tests, special_cases) {
 TEST(to_ascii_tests, comma_test) {
   ASSERT_FALSE(ada::idna::to_ascii("128.0,0.1").empty());
 }
+
+// Unicode 17 test cases - CJK Extension J code points (U+323B0..U+33479)
+TEST(to_ascii_tests, unicode17_cjk_extension_j) {
+  // Test case: U+32931 (𲤱) - CJK Extension J character
+  // Input: "𲤱20.音.ꡦ1." (U+32931, ASCII, U+97F3, U+A866)
+  ASSERT_EQ(ada::idna::to_ascii("\xf0\xb2\xa4\xb1"
+                                "20.\xe9\x9f\xb3.\xea\xa1\xa6"
+                                "1."),
+            "xn--20-9802c.xn--0w5a.xn--1-eg4e.")
+      << "CJK Extension J character should be valid in Unicode 17";
+
+  // Test case: Already punycode-encoded version should pass through
+  ASSERT_EQ(ada::idna::to_ascii("xn--20-9802c.xn--0w5a.xn--1-eg4e."),
+            "xn--20-9802c.xn--0w5a.xn--1-eg4e.")
+      << "Punycode version should remain unchanged";
+
+  // Test case: U+32B9A (𲮚) - CJK Extension J with combining marks
+  // Input: "𲮚9ꍩ៓.ss" (U+32B9A, ASCII 9, U+A369, U+17D3)
+  ASSERT_EQ(ada::idna::to_ascii("\xf0\xb2\xae\x9a"
+                                "9\xea\x8d\xa9\xe1\x9f\x93.ss"),
+            "xn--9-i0j5967eg3qz.ss")
+      << "CJK Extension J with combining marks should convert correctly";
+
+  // Test case: Same as above but with uppercase SS - should normalize to
+  // lowercase
+  ASSERT_EQ(ada::idna::to_ascii("\xf0\xb2\xae\x9a"
+                                "9\xea\x8d\xa9\xe1\x9f\x93.SS"),
+            "xn--9-i0j5967eg3qz.ss")
+      << "Uppercase SS should normalize to lowercase ss";
+}

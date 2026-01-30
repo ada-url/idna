@@ -1,4 +1,4 @@
-// IDNA  15.0.0
+// IDNA  17.0.0
 
 // clang-format off
 #ifndef ADA_IDNA_NORMALIZATION_TABLES_H

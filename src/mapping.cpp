@@ -11,33 +11,31 @@ namespace ada::idna {
 // ─── O(1) two-level table lookup ─────────────────────────────────────────────
 //
 // Returns one of:
-//   IDNA_VALID      – code point is valid, copy to output unchanged
-//   IDNA_DISALLOWED – code point is not allowed
-//   IDNA_IGNORED    – code point is ignored (maps to empty string, offset 0)
+//   IDNA_VALID      – keep code point in output unchanged
+//   IDNA_DISALLOWED – code point is not allowed (map() returns error)
+//   IDNA_IGNORED    – code point is ignored (index 0 = empty UTF-8 entry)
 //   other           – byte offset into idna_utf8_mappings[] (null-terminated)
 //
+// The two-level table covers [0, IDNA_LOW_RANGE_END).  All constants
+// (LOW_RANGE_END, HIGH_IGNORED_*) are generated from the IDNA table itself;
+// no Unicode version-specific values are hardcoded here.
+//
 static uint16_t idna_lookup(uint32_t cp) noexcept {
-  // ── Low range: use two-level table ─────────────────────────────────────────
+  // ── Two-level table covers the full active code-point range ───────────────
   if (cp < IDNA_LOW_RANGE_END) {
     uint16_t ref = idna_stage1[cp >> IDNA_BLOCK_BITS];
     if (ref & IDNA_BOOL_FLAG) {
       // Boolean block: one bit per code point, 1 = VALID, 0 = DISALLOWED.
       uint32_t bit_idx = static_cast<uint32_t>(ref & ~IDNA_BOOL_FLAG) * IDNA_BLOCK_SIZE
                          + (cp & IDNA_BLOCK_MASK);
-      bool is_valid = (idna_bool_blocks[bit_idx >> 6] >> (bit_idx & 63)) & 1u;
+      bool is_valid = (idna_bool_blocks[bit_idx >> 6] >> (bit_idx & 63u)) & 1u;
       return is_valid ? IDNA_VALID : IDNA_DISALLOWED;
     }
     return idna_stage2[ref + (cp & IDNA_BLOCK_MASK)];
   }
 
-  // ── Mid range: 0x30000 – 0x3347A (handled with branches, no table) ─────────
-  if (cp < 0x3347Au) {
-    if (cp < IDNA_MID_VALID1_END)   return IDNA_VALID;       // 0x30000–0x3134A
-    if (cp < IDNA_MID_DISALLOW_END) return IDNA_DISALLOWED;  // 0x3134B–0x3134F
-    return IDNA_VALID;                                        // 0x31350–0x33479
-  }
-
-  // ── High ignored range: variation selectors supplement ─────────────────────
+  // ── Variation selectors supplement (U+E0100–U+E01EF): all ignored ─────────
+  // Everything else above IDNA_LOW_RANGE_END is disallowed.
   if (cp >= IDNA_HIGH_IGNORED_START && cp < IDNA_HIGH_IGNORED_END) {
     return IDNA_IGNORED;
   }
@@ -46,8 +44,8 @@ static uint16_t idna_lookup(uint32_t cp) noexcept {
 }
 
 // ─── Decode one UTF-8 code point ─────────────────────────────────────────────
-// Advances *ptr past the bytes consumed.  Does NOT check for overlong/invalid
-// sequences – the mapping table is trusted to be well-formed.
+// Advances *ptr past the bytes consumed.  The mapping table is trusted to be
+// well-formed UTF-8, so no validity checking is performed.
 static char32_t utf8_next(const uint8_t*& ptr) noexcept {
   uint8_t b0 = *ptr++;
   if (b0 < 0x80u) return static_cast<char32_t>(b0);
@@ -98,7 +96,7 @@ void ascii_map(char* input, size_t length) {
 
 // ─── IDNA map ─────────────────────────────────────────────────────────────────
 // Maps each code point according to IDNA processing.
-// Returns an empty string on error (disallowed code point).
+// Returns an empty string on error (disallowed code point encountered).
 std::u32string map(std::u32string_view input) {
   //  [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap).
   //  For each code point in the domain_name string, look up the status
@@ -126,10 +124,10 @@ std::u32string map(std::u32string_view input) {
       answer.push_back(x);
       continue;
     }
-    // IDNA_IGNORED (status==0) falls through to mapping decode with empty string:
-    // idna_utf8_mappings[0] == 0x00 (null), so the loop below doesn't execute.
+    // IDNA_IGNORED (status==0) falls through: idna_utf8_mappings[0] == 0x00
+    // (null terminator), so the decode loop below produces nothing.
 
-    // Mapped: decode null-terminated UTF-8 from the mapping table.
+    // Mapped (or ignored): decode null-terminated UTF-8 from the mapping table.
     const uint8_t* ptr = idna_utf8_mappings + status;
     while (*ptr != 0) {
       answer.push_back(utf8_next(ptr));

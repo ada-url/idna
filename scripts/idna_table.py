@@ -17,19 +17,6 @@ SENTINEL_DISALLOWED = 0xFFFE
 # stage2 value 0 is reserved for "ignored" (empty mapping, index 0 in utf8 table)
 IGNORED_IDX  = 0
 
-# Unicode code-point ranges that need table lookup
-# Low range: 0x00000 – LOW_RANGE_END (exclusive)
-LOW_RANGE_END = 0x30000    # 196 608 code points
-
-# Mid range handled with simple branches in C++ code (no table):
-#   0x30000 – 0x3134A : valid
-#   0x3134B – 0x3134F : disallowed
-#   0x31350 – 0x33479 : valid
-#   0x3347A – 0xE00FF : disallowed
-
-# Ignored range: 0xE0100 – 0xE01EF (variation selectors supplement)
-# Everything else: disallowed
-
 # ─── Download / cache IDNA mapping table ─────────────────────────────────────
 url      = "https://www.unicode.org/Public/idna/latest/IdnaMappingTable.txt"
 filename = "IdnaMappingTable.txt"
@@ -97,15 +84,48 @@ def parse_idna(table_data):
         entries.append((cp_start, cp_end, code, mapped_seq))
     return entries
 
+# ─── Determine table layout from actual data ──────────────────────────────────
+def find_high_ignored_range(entries):
+    """
+    Find the ignored code point range above U+E0000.
+    Returns (start, end_exclusive) or (None, None) if not found.
+    """
+    high_ignored = [(s, e) for s, e, c, m in entries if c == 0 and s >= 0xE0000]
+    if not high_ignored:
+        return None, None
+    start = min(s for s, e in high_ignored)
+    end   = max(e for s, e in high_ignored) + 1  # exclusive
+    return start, end
+
+def compute_low_range_end(entries, high_ignored_start):
+    """
+    Find the first block boundary that covers all non-disallowed code points
+    below the high-ignored range.  This dynamically captures the full active
+    range (including CJK Extension I/J and similar future additions) without
+    requiring any hardcoded boundaries.
+    """
+    max_active_cp = 0
+    for cp_start, cp_end, code, seq in entries:
+        # Exclude code points in/above the high ignored range and pure
+        # disallowed entries.
+        if cp_start >= high_ignored_start:
+            continue
+        if code != 2:  # non-disallowed (valid, ignored, mapped)
+            max_active_cp = max(max_active_cp, cp_end)
+
+    # Round up to the next block boundary so that max_active_cp is
+    # fully contained within the table.
+    return ((max_active_cp >> BLOCK_BITS) + 1) << BLOCK_BITS
+
 # ─── Build flat per-code-point array + UTF-8 mapping table ───────────────────
-def build_flat_and_mappings(entries):
+def build_flat_and_mappings(entries, low_range_end):
     """
     Returns (flat, utf8_table, seq_to_idx) where
       flat[cp] = SENTINEL_VALID | SENTINEL_DISALLOWED | utf8_byte_offset
       utf8_table = bytearray of null-terminated UTF-8 mapping strings
       seq_to_idx = dict mapping tuple of codepoints → byte offset in utf8_table
     """
-    flat = [SENTINEL_DISALLOWED] * LOW_RANGE_END
+    flat = [SENTINEL_DISALLOWED] * low_range_end
 
     # Build UTF-8 mapping table.
     # Index 0 is always the empty string (for "ignored" code points).
@@ -124,7 +144,7 @@ def build_flat_and_mappings(entries):
     # Fill flat array
     for cp_start, cp_end, code, seq in entries:
         lo = max(cp_start, 0)
-        hi = min(cp_end + 1, LOW_RANGE_END)
+        hi = min(cp_end + 1, low_range_end)
         if lo >= hi:
             continue
         if code == 0:   # ignored → empty mapping
@@ -150,19 +170,20 @@ def build_two_level(flat):
       mixed_data = flat uint16_t array (all mixed blocks concatenated)
       bool_words = list of uint64_t bitwords; bit k=1 ↔ code point is VALID
     """
-    n_blocks   = (LOW_RANGE_END + BLOCK_SIZE - 1) // BLOCK_SIZE
-    stage1     = []
-    mixed_data = []
-    bool_words = []
-    mixed_map  = {}   # tuple(block) → base offset in mixed_data
-    bool_map   = {}   # int (bitword) → index in bool_words
+    block_size  = BLOCK_SIZE
+    n_blocks    = (len(flat) + block_size - 1) // block_size
+    stage1      = []
+    mixed_data  = []
+    bool_words  = []
+    mixed_map   = {}   # tuple(block) → base offset in mixed_data
+    bool_map    = {}   # int (bitword) → index in bool_words
 
     for bi in range(n_blocks):
-        start = bi * BLOCK_SIZE
-        end   = start + BLOCK_SIZE
+        start = bi * block_size
+        end   = start + block_size
         block = flat[start:end]
-        if len(block) < BLOCK_SIZE:
-            block = block + [SENTINEL_DISALLOWED] * (BLOCK_SIZE - len(block))
+        if len(block) < block_size:
+            block = block + [SENTINEL_DISALLOWED] * (block_size - len(block))
 
         # Check if block only contains VALID / DISALLOWED (boolean block)
         is_bool = all(v in (SENTINEL_VALID, SENTINEL_DISALLOWED) for v in block)
@@ -190,7 +211,7 @@ def build_two_level(flat):
 def hex2(v):  return f'0x{v:02X}'
 def hex4(v):  return f'0x{v:04X}'
 def hex8(v):  return f'0x{v:08X}'
-def hex16(v): return f'0x{v:016X}'
+def hex16(v): return f'0x{v:016X}ULL'
 
 def emit_array_uint8(name, data, cols=16):
     lines  = [f'const uint8_t {name}[{len(data)}] = {{']
@@ -237,7 +258,16 @@ def print_idna():
     version    = get_version(table_data)
     entries    = parse_idna(table_data)
 
-    flat, utf8_table, seq_to_idx = build_flat_and_mappings(entries)
+    # Derive layout constants from the actual table data.
+    high_ignored_start, high_ignored_end = find_high_ignored_range(entries)
+    if high_ignored_start is None:
+        # No isolated high-ignored range; nothing special needed above LOW_RANGE_END.
+        high_ignored_start = 0x110000
+        high_ignored_end   = 0x110000
+
+    low_range_end = compute_low_range_end(entries, high_ignored_start)
+
+    flat, utf8_table, seq_to_idx = build_flat_and_mappings(entries, low_range_end)
     stage1, mixed_data, bool_words = build_two_level(flat)
 
     n_stage1    = len(stage1)
@@ -247,18 +277,20 @@ def print_idna():
 
     total_bytes = (n_stage1 * 2) + (n_mixed * 2) + (n_bool * 8) + n_utf8
 
-    # Validate utf8 table entries will fit in uint16_t
-    max_offset = max(v for v in flat if v not in (SENTINEL_VALID, SENTINEL_DISALLOWED))
-    assert max_offset < 0xFFFD, f"UTF-8 table too large: max offset {max_offset:#x}"
-    assert len(utf8_table) < 0xFFFD, f"UTF-8 table won't fit in uint16_t: {len(utf8_table)}"
+    # Validate utf8 table entries will fit in uint16_t sentinels
+    assert len(utf8_table) < 0xFFFD, \
+        f"UTF-8 table too large: {len(utf8_table)} bytes, max 0xFFFD"
+    assert n_stage1 <= 0x8000, \
+        f"stage1 too large: {n_stage1} entries"
 
     print(f"// IDNA {version}")
     print(f"// Two-level compressed mapping table.")
+    print(f"// All constants are derived from the table data; no hardcoded boundaries.")
     print(f"// Total binary size: {total_bytes} bytes ({total_bytes/1024:.1f} KB)")
-    print(f"//   stage1:     {n_stage1*2:6} bytes")
-    print(f"//   stage2:     {n_mixed*2:6} bytes")
-    print(f"//   bool_blocks:{n_bool*8:6} bytes")
-    print(f"//   utf8 maps:  {n_utf8:6} bytes")
+    print(f"//   stage1:      {n_stage1*2:6} bytes  ({n_stage1} uint16_t entries)")
+    print(f"//   stage2:      {n_mixed*2:6} bytes  ({len(mixed_data)//BLOCK_SIZE} mixed blocks x {BLOCK_SIZE})")
+    print(f"//   bool_blocks: {n_bool*8:6} bytes  ({n_bool} uint64_t words)")
+    print(f"//   utf8 maps:   {n_utf8:6} bytes")
     print()
     print("// clang-format off")
     print("#ifndef ADA_IDNA_MAPPING_TABLE_H")
@@ -268,49 +300,48 @@ def print_idna():
     print("namespace ada::idna {")
     print()
 
-    # ── Constants ──────────────────────────────────────────────────────────────
+    # ── Constants (all derived from the actual table, not hardcoded) ───────────
     print(f"// Block size for two-level table (2^{BLOCK_BITS} = {BLOCK_SIZE} code points per block).")
-    print(f"constexpr uint32_t IDNA_BLOCK_BITS = {BLOCK_BITS};")
-    print(f"constexpr uint32_t IDNA_BLOCK_SIZE = {BLOCK_SIZE};")
-    print(f"constexpr uint32_t IDNA_BLOCK_MASK = {BLOCK_MASK};")
+    print(f"constexpr uint32_t IDNA_BLOCK_BITS = {BLOCK_BITS}u;")
+    print(f"constexpr uint32_t IDNA_BLOCK_SIZE = {BLOCK_SIZE}u;")
+    print(f"constexpr uint32_t IDNA_BLOCK_MASK = {BLOCK_MASK}u;")
     print()
     print(f"// Sentinel values stored in stage2 / returned by lookup.")
     print(f"constexpr uint16_t IDNA_VALID      = {hex4(SENTINEL_VALID)};  // code point is valid as-is")
     print(f"constexpr uint16_t IDNA_DISALLOWED = {hex4(SENTINEL_DISALLOWED)};  // code point is disallowed")
-    print(f"constexpr uint16_t IDNA_IGNORED    = {hex4(IGNORED_IDX)};      // code point is ignored (maps to empty)")
+    print(f"constexpr uint16_t IDNA_IGNORED    = {hex4(IGNORED_IDX)};    // ignored (index into empty UTF-8 entry)")
     print()
-    print(f"// Bit 15 of stage1 entry: set = boolean block, clear = mixed block.")
+    print(f"// Bit 15 of a stage1 entry: set = boolean block, clear = mixed block.")
     print(f"constexpr uint16_t IDNA_BOOL_FLAG  = {hex4(BOOL_FLAG)};")
     print()
-    print(f"// Upper code-point boundary of stage1/stage2 tables.")
-    print(f"constexpr uint32_t IDNA_LOW_RANGE_END = {hex8(LOW_RANGE_END)};")
+    print(f"// Two-level table covers code points [0, IDNA_LOW_RANGE_END).")
+    print(f"// Derived from the highest non-disallowed code point below the high-ignored range,")
+    print(f"// rounded up to the next {BLOCK_SIZE}-code-point block boundary.")
+    print(f"constexpr uint32_t IDNA_LOW_RANGE_END    = {hex8(low_range_end)};")
     print()
-    print(f"// Mid range (0x30000–0x3347A): handled with branch logic.")
-    print(f"// High ignored range (0xE0100–0xE01EF): variation selectors supplement.")
-    print(f"constexpr uint32_t IDNA_MID_VALID1_END   = {hex8(0x3134B)};  // exclusive")
-    print(f"constexpr uint32_t IDNA_MID_DISALLOW_END = {hex8(0x31350)};  // exclusive")
-    print(f"constexpr uint32_t IDNA_MID_VALID2_END   = {hex8(0x3347A)};  // exclusive")
-    print(f"constexpr uint32_t IDNA_HIGH_IGNORED_START = {hex8(0xE0100)};")
-    print(f"constexpr uint32_t IDNA_HIGH_IGNORED_END   = {hex8(0xE01F0)};  // exclusive")
+    print(f"// Variation selectors supplement: U+{high_ignored_start:04X}..U+{high_ignored_end-1:04X} are all ignored.")
+    print(f"// These are handled with a simple range check; everything else above")
+    print(f"// IDNA_LOW_RANGE_END is disallowed.")
+    print(f"constexpr uint32_t IDNA_HIGH_IGNORED_START = {hex8(high_ignored_start)};")
+    print(f"constexpr uint32_t IDNA_HIGH_IGNORED_END   = {hex8(high_ignored_end)};  // exclusive")
     print()
 
     # ── stage1 ─────────────────────────────────────────────────────────────────
-    print(f"// stage1[cp >> {BLOCK_BITS}]: index for each {BLOCK_SIZE}-code-point block.")
-    print(f"// If bit 15 is set, the lower 15 bits index into idna_bool_blocks[].")
-    print(f"// Otherwise the value is the base offset into idna_stage2[].")
+    print(f"// idna_stage1[cp >> {BLOCK_BITS}]: one entry per {BLOCK_SIZE}-code-point block.")
+    print(f"// Bit 15 set  → lower 15 bits = index into idna_bool_blocks[].")
+    print(f"// Bit 15 clear → value = base offset into idna_stage2[] for this block.")
     print(emit_array_uint16(f"idna_stage1", stage1))
     print()
 
     # ── stage2 (mixed blocks) ──────────────────────────────────────────────────
-    print(f"// idna_stage2[]: mixed blocks. Each entry is either IDNA_VALID,")
-    print(f"// IDNA_DISALLOWED, IDNA_IGNORED, or a byte offset into idna_utf8_mappings[].")
+    print(f"// idna_stage2[]: mixed blocks. Each entry is IDNA_VALID, IDNA_DISALLOWED,")
+    print(f"// IDNA_IGNORED, or a byte offset into idna_utf8_mappings[].")
     print(emit_array_uint16(f"idna_stage2", mixed_data))
     print()
 
     # ── boolean blocks ──────────────────────────────────────────────────────────
     print(f"// idna_bool_blocks[]: one uint64_t per boolean block.")
-    print(f"// Bit k (0-indexed from LSB) = 1 means code point (block_start + k) is VALID.")
-    print(f"// Bit k = 0 means DISALLOWED.")
+    print(f"// Bit k (0 = LSB) = 1 → (block_start + k) is VALID; 0 → DISALLOWED.")
     print(emit_array_uint64(f"idna_bool_blocks", bool_words))
     print()
 

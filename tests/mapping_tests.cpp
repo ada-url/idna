@@ -136,7 +136,8 @@ TEST(mapping_tests, valid_non_ascii_unchanged) {
 }
 
 // ── Mid-range boundaries (0x30000–0x3347A) ────────────────────────────────
-// These are handled with branch logic, not the two-level table.
+// These code points are inside the two-level table (LOW_RANGE_END = 0x33480).
+// U+3134B–U+3134F is a small disallowed gap within an otherwise-valid range.
 TEST(mapping_tests, mid_range_boundaries) {
   // U+2FFFF: last code point inside the low-range two-level table
   // (It is disallowed – just verify we don't crash or return wrong result)

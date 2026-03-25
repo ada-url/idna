@@ -1,37 +1,77 @@
 #include "ada/idna/mapping.h"
 
-#include <algorithm>
 #include <array>
+#include <cstring>
+#include <cstdint>
 #include <string>
 
 #include "mapping_tables.cpp"
 
 namespace ada::idna {
 
-// This can be greatly accelerated. For now we just use a simply
-// binary search. In practice, you should *not* do that.
-uint32_t find_range_index(uint32_t key) {
-  ////////////////
-  // This could be implemented with std::lower_bound, but we roll our own
-  // because we want to allow further optimizations in the future.
-  ////////////////
-  uint32_t len = std::size(table);
-  uint32_t low = 0;
-  uint32_t high = len - 1;
-  while (low <= high) {
-    uint32_t middle_index = (low + high) >> 1;  // cannot overflow
-    uint32_t middle_value = table[middle_index][0];
-    if (middle_value < key) {
-      low = middle_index + 1;
-    } else if (middle_value > key) {
-      high = middle_index - 1;
-    } else {
-      return middle_index;  // perfect match
+// ─── O(1) two-level table lookup ─────────────────────────────────────────────
+//
+// Returns one of:
+//   IDNA_VALID      – keep code point in output unchanged
+//   IDNA_DISALLOWED – code point is not allowed (map() returns error)
+//   IDNA_IGNORED    – code point is ignored (index 0 = empty UTF-8 entry)
+//   other           – byte offset into idna_utf8_mappings[] (null-terminated)
+//
+// The two-level table covers [0, IDNA_LOW_RANGE_END).  All constants
+// (LOW_RANGE_END, HIGH_IGNORED_*) are generated from the IDNA table itself;
+// no Unicode version-specific values are hardcoded here.
+//
+static uint16_t idna_lookup(uint32_t cp) noexcept {
+  // ── Two-level table covers the full active code-point range ───────────────
+  if (cp < IDNA_LOW_RANGE_END) {
+    uint16_t ref = idna_stage1[cp >> IDNA_BLOCK_BITS];
+    if (ref & IDNA_BOOL_FLAG) {
+      // Boolean block: one bit per code point, 1 = VALID, 0 = DISALLOWED.
+      uint32_t bit_idx =
+          static_cast<uint32_t>(ref & ~IDNA_BOOL_FLAG) * IDNA_BLOCK_SIZE +
+          (cp & IDNA_BLOCK_MASK);
+      bool is_valid = (idna_bool_blocks[bit_idx >> 6] >> (bit_idx & 63u)) & 1u;
+      return is_valid ? IDNA_VALID : IDNA_DISALLOWED;
     }
+    return idna_stage2[ref + (cp & IDNA_BLOCK_MASK)];
   }
-  return low == 0 ? 0 : low - 1;
+
+  // ── Variation selectors supplement (U+E0100–U+E01EF): all ignored ─────────
+  // Everything else above IDNA_LOW_RANGE_END is disallowed.
+  if (cp >= IDNA_HIGH_IGNORED_START && cp < IDNA_HIGH_IGNORED_END) {
+    return IDNA_IGNORED;
+  }
+
+  return IDNA_DISALLOWED;
 }
 
+// ─── Decode one UTF-8 code point ─────────────────────────────────────────────
+// Advances *ptr past the bytes consumed.  The mapping table is trusted to be
+// well-formed UTF-8, so no validity checking is performed.
+static char32_t utf8_next(const uint8_t*& ptr) noexcept {
+  uint8_t b0 = *ptr++;
+  if (b0 < 0x80u) return static_cast<char32_t>(b0);
+  if (b0 < 0xE0u) {
+    uint32_t cp = (b0 & 0x1Fu) << 6;
+    cp |= (*ptr++ & 0x3Fu);
+    return static_cast<char32_t>(cp);
+  }
+  if (b0 < 0xF0u) {
+    uint32_t cp = (b0 & 0x0Fu) << 12;
+    cp |= ((*ptr++ & 0x3Fu) << 6);
+    cp |= (*ptr++ & 0x3Fu);
+    return static_cast<char32_t>(cp);
+  }
+  // 4-byte sequence
+  uint32_t cp = (b0 & 0x07u) << 18;
+  cp |= ((*ptr++ & 0x3Fu) << 12);
+  cp |= ((*ptr++ & 0x3Fu) << 6);
+  cp |= (*ptr++ & 0x3Fu);
+  return static_cast<char32_t>(cp);
+}
+
+// ─── ASCII fast path
+// ──────────────────────────────────────────────────────────
 void ascii_map(char* input, size_t length) {
   auto broadcast = [](uint8_t v) -> uint64_t {
     return 0x101010101010101ull * v;
@@ -43,21 +83,24 @@ void ascii_map(char* input, size_t length) {
 
   for (; i + 7 < length; i += 8) {
     uint64_t word{};
-    memcpy(&word, input + i, sizeof(word));
+    std::memcpy(&word, input + i, sizeof(word));
     word ^=
         (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    memcpy(input + i, &word, sizeof(word));
+    std::memcpy(input + i, &word, sizeof(word));
   }
   if (i < length) {
     uint64_t word{};
-    memcpy(&word, input + i, length - i);
+    std::memcpy(&word, input + i, length - i);
     word ^=
         (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    memcpy(input + i, &word, length - i);
+    std::memcpy(input + i, &word, length - i);
   }
 }
 
-// Map the characters according to IDNA, returning the empty string on error.
+// ─── IDNA map
+// ───────────────────────────────────────────────────────────────── Maps each
+// code point according to IDNA processing. Returns an empty string on error
+// (disallowed code point encountered).
 std::u32string map(std::u32string_view input) {
   //  [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap).
   //  For each code point in the domain_name string, look up the status
@@ -66,8 +109,7 @@ std::u32string map(std::u32string_view input) {
   //  and take the following actions:
   //    * disallowed: Leave the code point unchanged in the string, and
   //    record that there was an error.
-  //    * ignored: Remove the code point from the string. This is
-  //    equivalent to mapping the code point to an empty string.
+  //    * ignored: Remove the code point from the string.
   //    * mapped: Replace the code point in the string by the value for
   //    the mapping in Section 5, [IDNA Mapping
   //    Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
@@ -75,30 +117,27 @@ std::u32string map(std::u32string_view input) {
   static std::u32string error = U"";
   std::u32string answer;
   answer.reserve(input.size());
+
   for (char32_t x : input) {
-    size_t index = find_range_index(x);
-    uint32_t descriptor = table[index][1];
-    uint8_t code = uint8_t(descriptor);
-    switch (code) {
-      case 0:
-        break;  // nothing to do, ignored
-      case 1:
-        answer.push_back(x);  // valid, we just copy it to output
-        break;
-      case 2:
-        return error;  // disallowed
-      // case 3 :
-      default:
-        // We have a mapping
-        {
-          size_t char_count = (descriptor >> 24);
-          uint16_t char_index = uint16_t(descriptor >> 8);
-          for (size_t idx = char_index; idx < char_index + char_count; idx++) {
-            answer.push_back(mappings[idx]);
-          }
-        }
+    uint16_t status = idna_lookup(static_cast<uint32_t>(x));
+
+    if (status == IDNA_DISALLOWED) {
+      return error;
+    }
+    if (status == IDNA_VALID) {
+      answer.push_back(x);
+      continue;
+    }
+    // IDNA_IGNORED (status==0) falls through: idna_utf8_mappings[0] == 0x00
+    // (null terminator), so the decode loop below produces nothing.
+
+    // Mapped (or ignored): decode null-terminated UTF-8 from the mapping table.
+    const uint8_t* ptr = idna_utf8_mappings + status;
+    while (*ptr != 0) {
+      answer.push_back(utf8_next(ptr));
     }
   }
   return answer;
 }
+
 }  // namespace ada::idna

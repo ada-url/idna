@@ -1,6 +1,7 @@
 #include "ada/idna/mapping.h"
 
 #include <array>
+#include <cstring>
 #include <cstdint>
 #include <string>
 
@@ -26,8 +27,9 @@ static uint16_t idna_lookup(uint32_t cp) noexcept {
     uint16_t ref = idna_stage1[cp >> IDNA_BLOCK_BITS];
     if (ref & IDNA_BOOL_FLAG) {
       // Boolean block: one bit per code point, 1 = VALID, 0 = DISALLOWED.
-      uint32_t bit_idx = static_cast<uint32_t>(ref & ~IDNA_BOOL_FLAG) * IDNA_BLOCK_SIZE
-                         + (cp & IDNA_BLOCK_MASK);
+      uint32_t bit_idx =
+          static_cast<uint32_t>(ref & ~IDNA_BOOL_FLAG) * IDNA_BLOCK_SIZE +
+          (cp & IDNA_BLOCK_MASK);
       bool is_valid = (idna_bool_blocks[bit_idx >> 6] >> (bit_idx & 63u)) & 1u;
       return is_valid ? IDNA_VALID : IDNA_DISALLOWED;
     }
@@ -68,7 +70,8 @@ static char32_t utf8_next(const uint8_t*& ptr) noexcept {
   return static_cast<char32_t>(cp);
 }
 
-// ─── ASCII fast path ──────────────────────────────────────────────────────────
+// ─── ASCII fast path
+// ──────────────────────────────────────────────────────────
 void ascii_map(char* input, size_t length) {
   auto broadcast = [](uint8_t v) -> uint64_t {
     return 0x101010101010101ull * v;
@@ -80,23 +83,24 @@ void ascii_map(char* input, size_t length) {
 
   for (; i + 7 < length; i += 8) {
     uint64_t word{};
-    __builtin_memcpy(&word, input + i, sizeof(word));
+    std::memcpy(&word, input + i, sizeof(word));
     word ^=
         (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    __builtin_memcpy(input + i, &word, sizeof(word));
+    std::memcpy(input + i, &word, sizeof(word));
   }
   if (i < length) {
     uint64_t word{};
-    __builtin_memcpy(&word, input + i, length - i);
+    std::memcpy(&word, input + i, length - i);
     word ^=
         (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    __builtin_memcpy(input + i, &word, length - i);
+    std::memcpy(input + i, &word, length - i);
   }
 }
 
-// ─── IDNA map ─────────────────────────────────────────────────────────────────
-// Maps each code point according to IDNA processing.
-// Returns an empty string on error (disallowed code point encountered).
+// ─── IDNA map
+// ───────────────────────────────────────────────────────────────── Maps each
+// code point according to IDNA processing. Returns an empty string on error
+// (disallowed code point encountered).
 std::u32string map(std::u32string_view input) {
   //  [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap).
   //  For each code point in the domain_name string, look up the status

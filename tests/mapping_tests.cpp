@@ -26,7 +26,7 @@ TEST(mapping_tests, ascii_digits_and_hyphen_valid) {
     EXPECT_EQ(ada::idna::map(input), input)
         << "Digit U+" << std::hex << (unsigned)cp << " should be valid";
   }
-  EXPECT_EQ(ada::idna::map(U"-"), U"-"); // hyphen-minus
+  EXPECT_EQ(ada::idna::map(U"-"), U"-");  // hyphen-minus
 }
 
 // ── Ignored code points → empty output ────────────────────────────────────
@@ -108,7 +108,8 @@ TEST(mapping_tests, multi_codepoint_mappings) {
   // U+00B3 SUPERSCRIPT THREE → "3"
   EXPECT_EQ(ada::idna::map(U"\U000000B3"), U"3");
   // U+00BC VULGAR FRACTION ONE QUARTER → "1/4" (U+0031 U+2044 U+0034)
-  EXPECT_EQ(ada::idna::map(U"\U000000BC"), (std::u32string{0x31, 0x2044, 0x34}));
+  EXPECT_EQ(ada::idna::map(U"\U000000BC"),
+            (std::u32string{0x31, 0x2044, 0x34}));
   // U+FB00 LATIN SMALL LIGATURE FF → "ff"
   EXPECT_EQ(ada::idna::map(U"\U0000FB00"), U"ff");
   // U+FB01 LATIN SMALL LIGATURE FI → "fi"
@@ -141,7 +142,7 @@ TEST(mapping_tests, valid_non_ascii_unchanged) {
 TEST(mapping_tests, mid_range_boundaries) {
   // U+2FFFF: last code point inside the low-range two-level table
   // (It is disallowed – just verify we don't crash or return wrong result)
-  EXPECT_TRUE(ada::idna::map(U"\U0002FFFF").empty()); // disallowed
+  EXPECT_TRUE(ada::idna::map(U"\U0002FFFF").empty());  // disallowed
 
   // U+30000: first valid code point of mid range (CJK Extension I start)
   EXPECT_EQ(ada::idna::map(U"\U00030000"), (std::u32string{0x30000}));
@@ -236,10 +237,12 @@ TEST(mapping_tests, string_disallowed_anywhere_fails) {
   // Disallowed in the middle (U+0080, first C1 control)
   EXPECT_TRUE(ada::idna::map(std::u32string(U"hel") +
                              std::u32string(1, char32_t(0x80)) +
-                             std::u32string(U"lo")).empty());
+                             std::u32string(U"lo"))
+                  .empty());
   // Disallowed at the end
   EXPECT_TRUE(ada::idna::map(std::u32string(U"hello") +
-                             std::u32string(1, char32_t(0x80))).empty());
+                             std::u32string(1, char32_t(0x80)))
+                  .empty());
 }
 
 TEST(mapping_tests, string_multi_cp_mappings_in_context) {
@@ -249,9 +252,7 @@ TEST(mapping_tests, string_multi_cp_mappings_in_context) {
   EXPECT_EQ(ada::idna::map(U"A\U0000FB00B"), U"affb");
 }
 
-TEST(mapping_tests, empty_string) {
-  EXPECT_EQ(ada::idna::map(U""), U"");
-}
+TEST(mapping_tests, empty_string) { EXPECT_EQ(ada::idna::map(U""), U""); }
 
 // ── CJK compatibility ideographs in the mapping range ─────────────────────
 // These are in the high area of the two-level table (0x2F800 range).

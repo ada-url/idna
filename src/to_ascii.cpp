@@ -98,9 +98,8 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
       if (tmp_buffer != post_map) {
         return error;
       }
-      std::u32string pre_normal = post_map;
       normalize(post_map);
-      if (post_map != pre_normal) {
+      if (post_map != tmp_buffer) {
         return error;
       }
       if (post_map.empty()) {
@@ -185,9 +184,8 @@ std::string to_ascii(std::string_view ut8_string) {
       if (tmp_buffer != post_map) {
         return error;
       }
-      std::u32string pre_normal = post_map;
       normalize(post_map);
-      if (post_map != pre_normal) {
+      if (post_map != tmp_buffer) {
         return error;
       }
       if (post_map.empty()) {

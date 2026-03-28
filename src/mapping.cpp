@@ -101,7 +101,7 @@ void ascii_map(char* input, size_t length) {
 // ───────────────────────────────────────────────────────────────── Maps each
 // code point according to IDNA processing. Returns an empty string on error
 // (disallowed code point encountered).
-std::u32string map(std::u32string_view input) {
+bool map(std::u32string_view input, std::u32string& out) {
   //  [Map](https://www.unicode.org/reports/tr46/#ProcessingStepMap).
   //  For each code point in the domain_name string, look up the status
   //  value in Section 5, [IDNA Mapping
@@ -114,18 +114,15 @@ std::u32string map(std::u32string_view input) {
   //    the mapping in Section 5, [IDNA Mapping
   //    Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
   //    * valid: Leave the code point unchanged in the string.
-  static std::u32string error = U"";
-  std::u32string answer;
-  answer.reserve(input.size());
-
+  out.clear();
+  out.reserve(input.size());
   for (char32_t x : input) {
     uint16_t status = idna_lookup(static_cast<uint32_t>(x));
-
     if (status == IDNA_DISALLOWED) {
-      return error;
+      return false;
     }
     if (status == IDNA_VALID) {
-      answer.push_back(x);
+      out.push_back(x);
       continue;
     }
     // IDNA_IGNORED (status==0) falls through: idna_utf8_mappings[0] == 0x00
@@ -134,8 +131,16 @@ std::u32string map(std::u32string_view input) {
     // Mapped (or ignored): decode null-terminated UTF-8 from the mapping table.
     const uint8_t* ptr = idna_utf8_mappings + status;
     while (*ptr != 0) {
-      answer.push_back(utf8_next(ptr));
+      out.push_back(utf8_next(ptr));
     }
+  }
+  return true;
+}
+
+std::u32string map(std::u32string_view input) {
+  std::u32string answer;
+  if (!map(input, answer)) {
+    return {};
   }
   return answer;
 }

@@ -38,10 +38,6 @@ static constexpr int32_t adapt(int32_t d, int32_t n, bool firsttime) {
 }
 
 bool punycode_to_utf32(std::string_view input, std::u32string &out) {
-  // See https://github.com/whatwg/url/issues/803
-  if (input.starts_with("xn--")) {
-    return false;
-  }
   int32_t written_out{0};
   out.reserve(out.size() + input.size());
   uint32_t n = initial_n;
@@ -98,13 +94,20 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
     written_out++;
     ++i;
   }
+  // See https://github.com/whatwg/url/issues/803
+  // Reject labels whose decoded form begins with "xn--" (double-encoded ACE).
+  if (out.size() >= 4 && out[0] == U'x' && out[1] == U'n' && out[2] == U'-' &&
+      out[3] == U'-') {
+    return false;
+  }
   return true;
 }
 
 bool verify_punycode(std::string_view input) {
-  if (input.starts_with("xn--")) {
-    return false;
-  }
+  // Track only the first 4 decoded code points to check for the "xn--" prefix.
+  // This avoids heap allocation while still detecting double-encoded ACE
+  // labels.
+  uint32_t first4[4]{};
   size_t written_out{0};
   uint32_t n = initial_n;
   int32_t i = 0;
@@ -115,6 +118,9 @@ bool verify_punycode(std::string_view input) {
     for (uint8_t c : input.substr(0, end_of_ascii)) {
       if (c >= 0x80) {
         return false;
+      }
+      if (written_out < 4) {
+        first4[written_out] = c;
       }
       written_out++;
     }
@@ -155,10 +161,23 @@ bool verify_punycode(std::string_view input) {
     if (n < 0x80) {
       return false;
     }
+    // Simulate insert at position i, maintaining only the first 4 slots.
+    size_t insert_pos = size_t(i);
+    if (insert_pos < 4) {
+      for (size_t j = 3; j > insert_pos; j--) {
+        first4[j] = first4[j - 1];
+      }
+      first4[insert_pos] = n;
+    }
     written_out++;
     ++i;
   }
-
+  // See https://github.com/whatwg/url/issues/803
+  // Reject labels whose decoded form begins with "xn--" (double-encoded ACE).
+  if (written_out >= 4 && first4[0] == U'x' && first4[1] == U'n' &&
+      first4[2] == U'-' && first4[3] == U'-') {
+    return false;
+  }
   return true;
 }
 

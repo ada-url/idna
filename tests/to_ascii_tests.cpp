@@ -1,4 +1,3 @@
-#include "gtest/gtest.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -8,6 +7,7 @@
 #include "ada/idna/punycode.h"
 #include "ada/idna/to_ascii.h"
 #include "ada/idna/unicode_transcoding.h"
+#include "gtest/gtest.h"
 
 class IdnaFileTest : public ::testing::Test {
  protected:
@@ -138,4 +138,19 @@ TEST(to_ascii_tests, unicode17_cjk_extension_j) {
                                 "9\xea\x8d\xa9\xe1\x9f\x93.SS"),
             "xn--9-i0j5967eg3qz.ss")
       << "Uppercase SS should normalize to lowercase ss";
+}
+
+// Regression test for https://github.com/whatwg/url/issues/803
+// A label like U+33FF U+33FD followed by ASCII "xn--" encodes to a punycode
+// payload starting with "xn--", but the decoded form begins with non-ASCII
+// characters -- it is NOT a double-encoded ACE label and must be accepted.
+TEST(to_ascii_tests, mixed_label_xn_prefix_regression) {
+  // U+33FF = \xe3\x8f\xbf, U+33FD = \xe3\x8f\xbd in UTF-8
+  const std::string input = "\xe3\x8f\xbf\xe3\x8f\xbdxn--.example";
+  std::string first = ada::idna::to_ascii(input);
+  ASSERT_FALSE(first.empty()) << "Mixed IDNA label whose punycode starts with "
+                                 "'xn--' must not be rejected";
+  // Idempotency: to_ascii applied twice must give the same result.
+  std::string second = ada::idna::to_ascii(first);
+  ASSERT_EQ(first, second) << "to_ascii must be idempotent";
 }

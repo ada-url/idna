@@ -65,6 +65,9 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   std::string mapped_string = std::string(ut8_string);
   ascii_map(mapped_string.data(), mapped_string.size());
   std::string out;
+  out.reserve(mapped_string.size());
+  std::u32string tmp_buffer;
+  std::u32string post_map;
   size_t label_start = 0;
 
   while (label_start != mapped_string.size()) {
@@ -83,7 +86,7 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
       std::string_view puny_segment_ascii(
           out.data() + out.size() - label_view.size() + 4,
           label_view.size() - 4);
-      std::u32string tmp_buffer;
+      tmp_buffer.clear();
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       if (!is_ok) {
         return error;
@@ -94,7 +97,9 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
       if (is_ascii(tmp_buffer)) {
         return error;
       }
-      std::u32string post_map = ada::idna::map(tmp_buffer);
+      if (!ada::idna::map(tmp_buffer, post_map)) {
+        return error;
+      }
       if (tmp_buffer != post_map) {
         return error;
       }
@@ -146,6 +151,9 @@ std::string to_ascii(std::string_view ut8_string) {
   utf32 = ada::idna::map(utf32);
   normalize(utf32);
   std::string out;
+  out.reserve(ut8_string.size());
+  std::u32string tmp_buffer;
+  std::u32string post_map;
   size_t label_start = 0;
 
   while (label_start != utf32.size()) {
@@ -169,7 +177,7 @@ std::string to_ascii(std::string_view ut8_string) {
       std::string_view puny_segment_ascii(
           out.data() + out.size() - label_view.size() + 4,
           label_view.size() - 4);
-      std::u32string tmp_buffer;
+      tmp_buffer.clear();
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       if (!is_ok) {
         return error;
@@ -180,7 +188,9 @@ std::string to_ascii(std::string_view ut8_string) {
       if (is_ascii(tmp_buffer)) {
         return error;
       }
-      std::u32string post_map = ada::idna::map(tmp_buffer);
+      if (!ada::idna::map(tmp_buffer, post_map)) {
+        return error;
+      }
       if (tmp_buffer != post_map) {
         return error;
       }

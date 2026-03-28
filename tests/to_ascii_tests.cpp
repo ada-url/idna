@@ -1,4 +1,3 @@
-#include "gtest/gtest.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -8,6 +7,7 @@
 #include "ada/idna/punycode.h"
 #include "ada/idna/to_ascii.h"
 #include "ada/idna/unicode_transcoding.h"
+#include "gtest/gtest.h"
 
 class IdnaFileTest : public ::testing::Test {
  protected:
@@ -148,8 +148,8 @@ TEST(to_ascii_tests, mixed_label_xn_prefix_regression) {
   // U+33FF = \xe3\x8f\xbf, U+33FD = \xe3\x8f\xbd in UTF-8
   const std::string input = "\xe3\x8f\xbf\xe3\x8f\xbdxn--.example";
   std::string first = ada::idna::to_ascii(input);
-  ASSERT_FALSE(first.empty())
-      << "Mixed IDNA label whose punycode starts with 'xn--' must not be rejected";
+  ASSERT_FALSE(first.empty()) << "Mixed IDNA label whose punycode starts with "
+                                 "'xn--' must not be rejected";
   // Idempotency: to_ascii applied twice must give the same result.
   std::string second = ada::idna::to_ascii(first);
   ASSERT_EQ(first, second) << "to_ascii must be idempotent";

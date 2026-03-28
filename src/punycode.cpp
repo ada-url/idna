@@ -105,7 +105,8 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
 
 bool verify_punycode(std::string_view input) {
   // Track only the first 4 decoded code points to check for the "xn--" prefix.
-  // This avoids heap allocation while still detecting double-encoded ACE labels.
+  // This avoids heap allocation while still detecting double-encoded ACE
+  // labels.
   uint32_t first4[4]{};
   size_t written_out{0};
   uint32_t n = initial_n;

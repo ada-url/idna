@@ -60,61 +60,62 @@ bool contains_forbidden_domain_code_point(std::string_view view) {
 // We return "" on error.
 static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   static const std::string error = "";
-  // copy and map
-  // we could be more efficient by avoiding the copy when unnecessary.
-  std::string mapped_string = std::string(ut8_string);
-  ascii_map(mapped_string.data(), mapped_string.size());
   std::string out;
-  out.reserve(mapped_string.size());
+  out.reserve(ut8_string.size());
   std::u32string tmp_buffer;
   std::u32string post_map;
   size_t label_start = 0;
 
-  while (label_start != mapped_string.size()) {
-    size_t loc_dot = mapped_string.find('.', label_start);
+  while (label_start != ut8_string.size()) {
+    size_t loc_dot = ut8_string.find('.', label_start);
     bool is_last_label = (loc_dot == std::string_view::npos);
-    size_t label_size = is_last_label ? mapped_string.size() - label_start
-                                      : loc_dot - label_start;
+    size_t label_size =
+        is_last_label ? ut8_string.size() - label_start : loc_dot - label_start;
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
-    std::string_view label_view(mapped_string.data() + label_start, label_size);
+    std::string_view label_view(ut8_string.data() + label_start, label_size);
     label_start += label_size_with_dot;
     if (label_size == 0) {
       // empty label? Nothing to do.
-    } else if (label_view.starts_with("xn--")) {
-      // The xn-- part is the expensive game.
-      out.append(label_view);
-      std::string_view puny_segment_ascii(
-          out.data() + out.size() - label_view.size() + 4,
-          label_view.size() - 4);
-      tmp_buffer.clear();
-      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
-      if (!is_ok) {
-        return error;
-      }
-      // If the input is just ASCII, it should not have been encoded
-      // as punycode.
-      // https://github.com/whatwg/url/issues/760
-      if (is_ascii(tmp_buffer)) {
-        return error;
-      }
-      if (!ada::idna::map(tmp_buffer, post_map)) {
-        return error;
-      }
-      if (tmp_buffer != post_map) {
-        return error;
-      }
-      normalize(post_map);
-      if (post_map != tmp_buffer) {
-        return error;
-      }
-      if (post_map.empty()) {
-        return error;
-      }
-      if (!is_label_valid(post_map)) {
-        return error;
-      }
     } else {
+      // Append the label to out and lowercase it in-place, avoiding a separate
+      // copy of the entire input string.
+      size_t label_out_start = out.size();
       out.append(label_view);
+      ascii_map(out.data() + label_out_start, label_size);
+      std::string_view mapped_label(out.data() + label_out_start, label_size);
+      if (mapped_label.starts_with("xn--")) {
+        // The xn-- part is the expensive game.
+        std::string_view puny_segment_ascii(out.data() + label_out_start + 4,
+                                            label_size - 4);
+        tmp_buffer.clear();
+        bool is_ok =
+            ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
+        if (!is_ok) {
+          return error;
+        }
+        // If the input is just ASCII, it should not have been encoded
+        // as punycode.
+        // https://github.com/whatwg/url/issues/760
+        if (is_ascii(tmp_buffer)) {
+          return error;
+        }
+        if (!ada::idna::map(tmp_buffer, post_map)) {
+          return error;
+        }
+        if (tmp_buffer != post_map) {
+          return error;
+        }
+        normalize(post_map);
+        if (post_map != tmp_buffer) {
+          return error;
+        }
+        if (post_map.empty()) {
+          return error;
+        }
+        if (!is_label_valid(post_map)) {
+          return error;
+        }
+      }
     }
     if (!is_last_label) {
       out.push_back('.');
@@ -147,13 +148,17 @@ std::string to_ascii(std::string_view ut8_string) {
   if (actual_utf32_length == 0) {
     return error;
   }
-  // mapping
-  utf32 = ada::idna::map(utf32);
+  // mapping: use the two-argument overload to avoid an extra heap allocation
+  // that the single-argument overload (which returns by value) would incur.
+  std::u32string tmp_buffer;
+  std::u32string post_map;
+  if (!ada::idna::map(utf32, tmp_buffer)) {
+    return error;
+  }
+  utf32 = std::move(tmp_buffer);
   normalize(utf32);
   std::string out;
   out.reserve(ut8_string.size());
-  std::u32string tmp_buffer;
-  std::u32string post_map;
   size_t label_start = 0;
 
   while (label_start != utf32.size()) {
@@ -168,15 +173,21 @@ std::string to_ascii(std::string_view ut8_string) {
       // empty label? Nothing to do.
     } else if (label_view.starts_with(U"xn--")) {
       // we do not need to check, e.g., Xn-- because mapping goes to lower case
+      // Validate first, then bulk-copy with a single resize to avoid per-char
+      // capacity checks in operator+=.
       for (char32_t c : label_view) {
         if (c >= 0x80) {
           return error;
         }
-        out += (unsigned char)(c);
       }
-      std::string_view puny_segment_ascii(
-          out.data() + out.size() - label_view.size() + 4,
-          label_view.size() - 4);
+      size_t label_out_start = out.size();
+      out.resize(label_out_start + label_size);
+      char* dest = out.data() + label_out_start;
+      for (char32_t c : label_view) {
+        *dest++ = static_cast<char>(c);
+      }
+      std::string_view puny_segment_ascii(out.data() + label_out_start + 4,
+                                          label_size - 4);
       tmp_buffer.clear();
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       if (!is_ok) {
@@ -207,9 +218,12 @@ std::string to_ascii(std::string_view ut8_string) {
     } else {
       // The fast path here is an ascii label.
       if (is_ascii(label_view)) {
-        // no validation needed.
+        // no validation needed; bulk-copy with single resize.
+        size_t old_size = out.size();
+        out.resize(old_size + label_size);
+        char* dest = out.data() + old_size;
         for (char32_t c : label_view) {
-          out += (unsigned char)(c);
+          *dest++ = static_cast<char>(c);
         }
       } else {
         // slow path.

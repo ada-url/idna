@@ -69,8 +69,8 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   while (label_start != ut8_string.size()) {
     size_t loc_dot = ut8_string.find('.', label_start);
     bool is_last_label = (loc_dot == std::string_view::npos);
-    size_t label_size = is_last_label ? ut8_string.size() - label_start
-                                      : loc_dot - label_start;
+    size_t label_size =
+        is_last_label ? ut8_string.size() - label_start : loc_dot - label_start;
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
     std::string_view label_view(ut8_string.data() + label_start, label_size);
     label_start += label_size_with_dot;

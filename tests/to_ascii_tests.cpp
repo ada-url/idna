@@ -154,3 +154,22 @@ TEST(to_ascii_tests, mixed_label_xn_prefix_regression) {
   std::string second = ada::idna::to_ascii(first);
   ASSERT_EQ(first, second) << "to_ascii must be idempotent";
 }
+
+TEST(to_ascii_tests, bidi_regression) {
+  // LTR label ending in RTL/AL/AN should fail (Rule 6)
+  EXPECT_TRUE(ada::idna::to_ascii("a\u05D0").empty()) << "LTR + RTL should fail";
+  EXPECT_TRUE(ada::idna::to_ascii("a\u0627").empty()) << "LTR + AL should fail";
+  EXPECT_TRUE(ada::idna::to_ascii("a\u0661").empty()) << "LTR + AN should fail";
+
+  // RTL + trailing NSM
+  EXPECT_TRUE(ada::idna::to_ascii("a\u05D0\u0301").empty()) << "RTL + trailing NSM should fail";
+
+  // NSM before RTL
+  EXPECT_TRUE(ada::idna::to_ascii("a\u0301\u05D0").empty()) << "NSM before RTL should fail";
+
+  // multiple RTL
+  EXPECT_TRUE(ada::idna::to_ascii("a\u05D0\u05D1").empty()) << "multiple RTL should fail";
+
+  // multi-label
+  EXPECT_TRUE(ada::idna::to_ascii("a\u05D0.b").empty()) << "multi-label should fail";
+}

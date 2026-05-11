@@ -43,6 +43,21 @@ class IdnaToUnicodeTest : public ::testing::Test {
   }
 };
 
+// Labels whose punycode decodes to pure ASCII (e.g. "xn--abc-" -> "abc") must
+// NOT be emitted as the decoded form — they should stay in their original
+// xn-- form. Per UTS #46, the decoded label must round-trip through mapping,
+// normalization, and validity; an ASCII-only decoding implies a malformed
+// xn-- label.
+TEST(IdnaToUnicodeValidation, PunycodeDecodingToAsciiIsRejected) {
+  EXPECT_EQ(ada::idna::to_unicode("xn--abc-"), "xn--abc-");
+}
+
+// A genuine non-ASCII punycode label should still decode normally.
+TEST(IdnaToUnicodeValidation, ValidPunycodeStillDecodes) {
+  // xn--maana-pta -> mañana
+  EXPECT_EQ(ada::idna::to_unicode("xn--maana-pta"), "mañana");
+}
+
 // Test for Unicode conversions from file
 TEST_F(IdnaToUnicodeTest, AlternatingFileConversions) {
   std::string filename = GetUnicodeFilename();

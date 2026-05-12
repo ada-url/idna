@@ -29,7 +29,7 @@ TEST(mapping_tests, ascii_digits_and_hyphen_valid) {
   EXPECT_EQ(ada::idna::map(U"-"), U"-");  // hyphen-minus
 }
 
-// ── Ignored code points → empty output ────────────────────────────────────
+// ── Ignored code points -> empty output ────────────────────────────────────
 TEST(mapping_tests, ignored_code_points) {
   // U+00AD SOFT HYPHEN
   EXPECT_EQ(ada::idna::map(U"\U000000AD"), U"");
@@ -45,7 +45,7 @@ TEST(mapping_tests, ignored_code_points) {
 
 // Ignored code points embedded in a valid string vanish.
 TEST(mapping_tests, ignored_embedded_in_valid) {
-  // "ab\u034Fcd" → "abcd"  (CGJ between valid chars)
+  // "ab\u034Fcd" -> "abcd"  (CGJ between valid chars)
   EXPECT_EQ(ada::idna::map(U"ab\U0000034Fcd"), U"abcd");
   // Soft-hyphen inside a word
   EXPECT_EQ(ada::idna::map(U"foo\U000000ADbar"), U"foobar");
@@ -61,7 +61,7 @@ TEST(mapping_tests, variation_selector_supplement_ignored) {
   EXPECT_EQ(ada::idna::map(U"\U000E01EF"), U"");
 }
 
-// ── Disallowed code points → empty string returned from map() ─────────────
+// ── Disallowed code points -> empty string returned from map() ─────────────
 // Note: U+007F (DEL) is actually VALID in IDNA (range 007B..007F valid NV8).
 // The first disallowed code point after ASCII printables is U+0080.
 TEST(mapping_tests, disallowed_returns_empty) {
@@ -85,42 +85,42 @@ TEST(mapping_tests, disallowed_returns_empty) {
 
 // ── Single-code-point mappings ─────────────────────────────────────────────
 TEST(mapping_tests, single_codepoint_mappings) {
-  // U+00AA FEMININE ORDINAL INDICATOR → 'a'
+  // U+00AA FEMININE ORDINAL INDICATOR -> 'a'
   EXPECT_EQ(ada::idna::map(U"\U000000AA"), U"a");
-  // U+00BA MASCULINE ORDINAL INDICATOR → 'o'
+  // U+00BA MASCULINE ORDINAL INDICATOR -> 'o'
   EXPECT_EQ(ada::idna::map(U"\U000000BA"), U"o");
-  // U+00B5 MICRO SIGN → U+03BC (Greek small mu)
+  // U+00B5 MICRO SIGN -> U+03BC (Greek small mu)
   EXPECT_EQ(ada::idna::map(U"\U000000B5"), U"\U000003BC");
-  // U+03A3 GREEK CAPITAL SIGMA → U+03C3
+  // U+03A3 GREEK CAPITAL SIGMA -> U+03C3
   EXPECT_EQ(ada::idna::map(U"\U000003A3"), U"\U000003C3");
-  // U+0410 CYRILLIC CAPITAL A → U+0430
+  // U+0410 CYRILLIC CAPITAL A -> U+0430
   EXPECT_EQ(ada::idna::map(U"\U00000410"), U"\U00000430");
-  // U+FF21 FULLWIDTH LATIN CAPITAL LETTER A → 'a'
+  // U+FF21 FULLWIDTH LATIN CAPITAL LETTER A -> 'a'
   EXPECT_EQ(ada::idna::map(U"\U0000FF21"), U"a");
-  // U+FF3A FULLWIDTH LATIN CAPITAL LETTER Z → 'z'
+  // U+FF3A FULLWIDTH LATIN CAPITAL LETTER Z -> 'z'
   EXPECT_EQ(ada::idna::map(U"\U0000FF3A"), U"z");
 }
 
 // ── Multi-code-point mappings ──────────────────────────────────────────────
 TEST(mapping_tests, multi_codepoint_mappings) {
-  // U+00B2 SUPERSCRIPT TWO → "2"
+  // U+00B2 SUPERSCRIPT TWO -> "2"
   EXPECT_EQ(ada::idna::map(U"\U000000B2"), U"2");
-  // U+00B3 SUPERSCRIPT THREE → "3"
+  // U+00B3 SUPERSCRIPT THREE -> "3"
   EXPECT_EQ(ada::idna::map(U"\U000000B3"), U"3");
-  // U+00BC VULGAR FRACTION ONE QUARTER → "1/4" (U+0031 U+2044 U+0034)
+  // U+00BC VULGAR FRACTION ONE QUARTER -> "1/4" (U+0031 U+2044 U+0034)
   EXPECT_EQ(ada::idna::map(U"\U000000BC"),
             (std::u32string{0x31, 0x2044, 0x34}));
-  // U+FB00 LATIN SMALL LIGATURE FF → "ff"
+  // U+FB00 LATIN SMALL LIGATURE FF -> "ff"
   EXPECT_EQ(ada::idna::map(U"\U0000FB00"), U"ff");
-  // U+FB01 LATIN SMALL LIGATURE FI → "fi"
+  // U+FB01 LATIN SMALL LIGATURE FI -> "fi"
   EXPECT_EQ(ada::idna::map(U"\U0000FB01"), U"fi");
-  // U+FB03 LATIN SMALL LIGATURE FFI → "ffi"
+  // U+FB03 LATIN SMALL LIGATURE FFI -> "ffi"
   EXPECT_EQ(ada::idna::map(U"\U0000FB03"), U"ffi");
-  // U+0132 LATIN CAPITAL LIGATURE IJ → "ij"
+  // U+0132 LATIN CAPITAL LIGATURE IJ -> "ij"
   EXPECT_EQ(ada::idna::map(U"\U00000132"), U"ij");
-  // U+01F1 LATIN CAPITAL LETTER DZ → "dz"
+  // U+01F1 LATIN CAPITAL LETTER DZ -> "dz"
   EXPECT_EQ(ada::idna::map(U"\U000001F1"), U"dz");
-  // U+1E9E LATIN CAPITAL LETTER SHARP S → U+00DF
+  // U+1E9E LATIN CAPITAL LETTER SHARP S -> U+00DF
   EXPECT_EQ(ada::idna::map(U"\U00001E9E"), U"\U000000DF");
 }
 
@@ -168,7 +168,7 @@ TEST(mapping_tests, mid_range_boundaries) {
 
 // ── High ignored range boundaries (0xE0100–0xE01EF) ───────────────────────
 TEST(mapping_tests, high_ignored_range_boundaries) {
-  // U+E00FF: just before the ignored range → disallowed
+  // U+E00FF: just before the ignored range -> disallowed
   EXPECT_TRUE(ada::idna::map(U"\U000E00FF").empty());
 
   // U+E0100: first in the ignored range
@@ -177,7 +177,7 @@ TEST(mapping_tests, high_ignored_range_boundaries) {
   // U+E01EF: last in the ignored range
   EXPECT_EQ(ada::idna::map(U"\U000E01EF"), U"");
 
-  // U+E01F0: just after the ignored range → disallowed
+  // U+E01F0: just after the ignored range -> disallowed
   EXPECT_TRUE(ada::idna::map(U"\U000E01F0").empty());
 }
 
@@ -196,17 +196,17 @@ TEST(mapping_tests, block_boundary_conditions) {
   // Block 2 starts at cp 128 (U+0080 first C1 control) – disallowed
   EXPECT_TRUE(ada::idna::map(std::u32string(1, char32_t(0x80))).empty());
 
-  // Block 3: cp 192 (U+00C0 'À') → mapped to 'à' (U+00E0)
+  // Block 3: cp 192 (U+00C0 'À') -> mapped to 'à' (U+00E0)
   EXPECT_EQ(ada::idna::map(U"\U000000C0"), U"\U000000E0");
-  // Block 3: cp 223 (U+00DF 'ß') → valid
+  // Block 3: cp 223 (U+00DF 'ß') -> valid
   EXPECT_EQ(ada::idna::map(U"\U000000DF"), U"\U000000DF");
-  // Block 4: cp 224 (U+00E0 'à') → valid
+  // Block 4: cp 224 (U+00E0 'à') -> valid
   EXPECT_EQ(ada::idna::map(U"\U000000E0"), U"\U000000E0");
 
-  // Block at 0x640 (cp 1600 = Arabic tatweel, U+0640) → valid
+  // Block at 0x640 (cp 1600 = Arabic tatweel, U+0640) -> valid
   EXPECT_EQ(ada::idna::map(U"\U00000640"), U"\U00000640");
 
-  // cp 0x3FC (1020 = U+03FC GREEK SMALL LETTER RHO WITH STROKE) → valid
+  // cp 0x3FC (1020 = U+03FC GREEK SMALL LETTER RHO WITH STROKE) -> valid
   EXPECT_EQ(ada::idna::map(U"\U000003FC"), U"\U000003FC");
 }
 
@@ -246,7 +246,7 @@ TEST(mapping_tests, string_disallowed_anywhere_fails) {
 }
 
 TEST(mapping_tests, string_multi_cp_mappings_in_context) {
-  // "ﬁle" (fi ligature + "le") → "file"
+  // "ﬁle" (fi ligature + "le") -> "file"
   EXPECT_EQ(ada::idna::map(U"\U0000FB01le"), U"file");
   // Mix of uppercase, ligature, and valid
   EXPECT_EQ(ada::idna::map(U"A\U0000FB00B"), U"affb");

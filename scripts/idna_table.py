@@ -123,7 +123,7 @@ def build_flat_and_mappings(entries, low_range_end):
     Returns (flat, utf8_table, seq_to_idx) where
       flat[cp] = SENTINEL_VALID | SENTINEL_DISALLOWED | utf8_byte_offset
       utf8_table = bytearray of null-terminated UTF-8 mapping strings
-      seq_to_idx = dict mapping tuple of codepoints → byte offset in utf8_table
+      seq_to_idx = dict mapping tuple of codepoints -> byte offset in utf8_table
     """
     flat = [SENTINEL_DISALLOWED] * low_range_end
 
@@ -147,7 +147,7 @@ def build_flat_and_mappings(entries, low_range_end):
         hi = min(cp_end + 1, low_range_end)
         if lo >= hi:
             continue
-        if code == 0:   # ignored → empty mapping
+        if code == 0:   # ignored -> empty mapping
             val = IGNORED_IDX
         elif code == 1: # valid
             val = SENTINEL_VALID
@@ -165,8 +165,8 @@ def build_two_level(flat):
     """
     Returns (stage1, mixed_data, bool_words) where
       stage1[i] = index for block i
-        bit 15 set  → bool block: lower 15 bits = bool_block_idx
-        bit 15 clear → mixed block: value = base offset into mixed_data[]
+        bit 15 set  -> bool block: lower 15 bits = bool_block_idx
+        bit 15 clear -> mixed block: value = base offset into mixed_data[]
       mixed_data = flat uint16_t array (all mixed blocks concatenated)
       bool_words = list of uint64_t bitwords; bit k=1 ↔ code point is VALID
     """
@@ -175,8 +175,8 @@ def build_two_level(flat):
     stage1      = []
     mixed_data  = []
     bool_words  = []
-    mixed_map   = {}   # tuple(block) → base offset in mixed_data
-    bool_map    = {}   # int (bitword) → index in bool_words
+    mixed_map   = {}   # tuple(block) -> base offset in mixed_data
+    bool_map    = {}   # int (bitword) -> index in bool_words
 
     for bi in range(n_blocks):
         start = bi * block_size
@@ -328,8 +328,8 @@ def print_idna():
 
     # ── stage1 ─────────────────────────────────────────────────────────────────
     print(f"// idna_stage1[cp >> {BLOCK_BITS}]: one entry per {BLOCK_SIZE}-code-point block.")
-    print(f"// Bit 15 set  → lower 15 bits = index into idna_bool_blocks[].")
-    print(f"// Bit 15 clear → value = base offset into idna_stage2[] for this block.")
+    print(f"// Bit 15 set  -> lower 15 bits = index into idna_bool_blocks[].")
+    print(f"// Bit 15 clear -> value = base offset into idna_stage2[] for this block.")
     print(emit_array_uint16(f"idna_stage1", stage1))
     print()
 
@@ -341,7 +341,7 @@ def print_idna():
 
     # ── boolean blocks ──────────────────────────────────────────────────────────
     print(f"// idna_bool_blocks[]: one uint64_t per boolean block.")
-    print(f"// Bit k (0 = LSB) = 1 → (block_start + k) is VALID; 0 → DISALLOWED.")
+    print(f"// Bit k (0 = LSB) = 1 -> (block_start + k) is VALID; 0 -> DISALLOWED.")
     print(emit_array_uint64(f"idna_bool_blocks", bool_words))
     print()
 

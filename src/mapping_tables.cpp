@@ -39,8 +39,8 @@ constexpr uint32_t IDNA_HIGH_IGNORED_START = 0x000E0100;
 constexpr uint32_t IDNA_HIGH_IGNORED_END   = 0x000E01F0;  // exclusive
 
 // idna_stage1[cp >> 6]: one entry per 64-code-point block.
-// Bit 15 set  → lower 15 bits = index into idna_bool_blocks[].
-// Bit 15 clear → value = base offset into idna_stage2[] for this block.
+// Bit 15 set  -> lower 15 bits = index into idna_bool_blocks[].
+// Bit 15 clear -> value = base offset into idna_stage2[] for this block.
 const uint16_t idna_stage1[3282] = {
 	0x8000, 0x0000, 0x0040, 0x0080, 0x00C0, 0x0100, 0x0140, 0x0180, 0x01C0, 0x0200, 0x0240, 0x0280,
 	0x8000, 0x02C0, 0x0300, 0x0340, 0x0380, 0x03C0, 0x0400, 0x0440, 0x0480, 0x04C0, 0x0500, 0x8001,
@@ -1279,7 +1279,7 @@ const uint16_t idna_stage2[11456] = {
 };
 
 // idna_bool_blocks[]: one uint64_t per boolean block.
-// Bit k (0 = LSB) = 1 → (block_start + k) is VALID; 0 → DISALLOWED.
+// Bit k (0 = LSB) = 1 -> (block_start + k) is VALID; 0 -> DISALLOWED.
 const uint64_t idna_bool_blocks[225] = {
 	0xFFFFFFFFFFFFFFFFULL, 0x001F87FFFFFF00FFULL, 0xFFFFFFFFEFFFFFC0ULL, 0xFFFFFFFFDFFFFFFFULL,
 	0xFFFFFFFFFFFF3FFFULL, 0xFFFFFFFFFFFFE7FFULL, 0x0003FFFFFFFFFFFFULL, 0xE7FFFFFFFFFFFFFFULL,

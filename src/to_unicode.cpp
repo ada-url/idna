@@ -62,11 +62,12 @@ std::string to_unicode(std::string_view input) {
           size_t written = simdutf::convert_utf32_to_utf8(
               tmp_buffer.data(), tmp_buffer.size(), output.data() + old_size);
           if (written != utf8_size) {
-            // This cannot happen because punycode_to_utf32 only produces valid Unicode
-            // code points, but if it does (it would indicate a bug in punycode_to_utf32 or
-            // simdutf), we can fall back to the original input.
-            // This is pendantic. We have no report of such an issue and no reason to expect it,
-            // but we want to be robust against any such bug.
+            // This cannot happen because punycode_to_utf32 only produces valid
+            // Unicode code points, but if it does (it would indicate a bug in
+            // punycode_to_utf32 or simdutf), we can fall back to the original
+            // input. This is pendantic. We have no report of such an issue and
+            // no reason to expect it, but we want to be robust against any such
+            // bug.
             output.resize(old_size);
             output.append(
                 std::string_view(input.data() + label_start, label_size));

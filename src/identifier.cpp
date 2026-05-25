@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <span>
 #include <string>
 
 #include "id_tables.cpp"
@@ -18,29 +19,34 @@ constexpr bool is_ascii_letter_or_digit(char32_t c) noexcept {
 
 bool valid_name_code_point(char32_t code_point, bool first) {
   // https://tc39.es/ecma262/#prod-IdentifierStart
-  // Fast paths:
-  if (first &&
-      (code_point == '$' || code_point == '_' || is_ascii_letter(code_point))) {
+
+  // Fast paths
+  if (first && (code_point == U'$' || code_point == U'_' ||
+                is_ascii_letter(code_point))) {
     return true;
   }
-  if (!first && (code_point == '$' || is_ascii_letter_or_digit(code_point))) {
+  if (!first && (code_point == U'$' || is_ascii_letter_or_digit(code_point))) {
     return true;
   }
-  // Slow path...
-  if (code_point == 0xffffffff) {
-    return false;  // minimal error handling
+
+  // Minimal error handling for invalid code point
+  if (code_point > 0x10FFFF) {
+    return false;
   }
-  if (first) {
-    auto iter = std::lower_bound(
-        std::begin(ada::idna::id_start), std::end(ada::idna::id_start),
-        code_point,
-        [](const uint32_t* range, uint32_t cp) { return range[1] < cp; });
-    return iter != std::end(id_start) && code_point >= (*iter)[0];
-  } else {
-    auto iter = std::lower_bound(
-        std::begin(id_continue), std::end(id_continue), code_point,
-        [](const uint32_t* range, uint32_t cp) { return range[1] < cp; });
-    return iter != std::end(id_start) && code_point >= (*iter)[0];
+  if (code_point >= 0xD800 && code_point <= 0xDFFF) {
+    return false;
   }
+
+  // Slow path: binary search through the appropriate Unicode range table.
+  // Each entry is a [low, high] inclusive range.
+  const std::span<const uint32_t[2]> ranges =
+      first ? std::span<const uint32_t[2]>{ada::idna::id_start}
+            : std::span<const uint32_t[2]>{ada::idna::id_continue};
+
+  const auto iter = std::ranges::lower_bound(
+      ranges, code_point, {},
+      [](const auto& range) { return range[1]; });  // project to range-high
+
+  return iter != ranges.end() && code_point >= (*iter)[0];
 }
 }  // namespace ada::idna

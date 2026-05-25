@@ -766,19 +766,17 @@ static directions dir_table[] = {
 // CheckJoiners and CheckBidi are true for URL specification.
 
 inline static direction find_direction(uint32_t code_point) noexcept {
-  auto it = std::lower_bound(
-      std::begin(dir_table), std::end(dir_table), code_point,
-      [](const directions& d, uint32_t c) { return d.final_code < c; });
+  const auto it = std::ranges::lower_bound(
+      dir_table, code_point, {},
+      &directions::final_code);  // project to the upper bound of each range
 
-  // next check is almost surely in vain, but we use it for safety.
-  if (it == std::end(dir_table)) {
+  // Safety check - almost always false, but cheap.
+  if (it == std::ranges::end(dir_table)) {
     return direction::NONE;
   }
-  // We have that d.final_code >= c.
-  if (code_point >= it->start_code) {
-    return it->direct;
-  }
-  return direction::NONE;
+
+  // Invariant: it->final_code >= code_point. Confirm it's also in range.
+  return code_point >= it->start_code ? it->direct : direction::NONE;
 }
 
 inline static size_t find_last_not_of_nsm(
@@ -1116,8 +1114,7 @@ bool is_label_valid(const std::u32string_view label) {
       0xe01d9, 0xe01da, 0xe01db, 0xe01dc, 0xe01dd, 0xe01de, 0xe01df, 0xe01e0,
       0xe01e1, 0xe01e2, 0xe01e3, 0xe01e4, 0xe01e5, 0xe01e6, 0xe01e7, 0xe01e8,
       0xe01e9, 0xe01ea, 0xe01eb, 0xe01ec, 0xe01ed, 0xe01ee, 0xe01ef};
-  if (std::binary_search(std::begin(combining), std::end(combining),
-                         label.front())) {
+  if (std::ranges::binary_search(combining, label.front())) {
     return false;
   }
   // We verify this next step as part of the mapping:
@@ -1193,8 +1190,7 @@ bool is_label_valid(const std::u32string_view label) {
     uint32_t c = label[i];
     if (c == 0x200c) {
       if (i > 0) {
-        if (std::binary_search(std::begin(virama), std::end(virama),
-                               label[i - 1])) {
+        if (std::ranges::binary_search(virama, label[i - 1])) {
           return true;
         }
       }
@@ -1203,12 +1199,12 @@ bool is_label_valid(const std::u32string_view label) {
       }
       // we go backward looking for L or D
       auto is_l_or_d = [](uint32_t code) {
-        return std::binary_search(std::begin(L), std::end(L), code) ||
-               std::binary_search(std::begin(D), std::end(D), code);
+        return std::ranges::binary_search(L, code) ||
+               std::ranges::binary_search(D, code);
       };
       auto is_r_or_d = [](uint32_t code) {
-        return std::binary_search(std::begin(R), std::end(R), code) ||
-               std::binary_search(std::begin(D), std::end(D), code);
+        return std::ranges::binary_search(R, code) ||
+               std::ranges::binary_search(D, code);
       };
       std::u32string_view before = label.substr(0, i);
       std::u32string_view after = label.substr(i + 1);
@@ -1218,8 +1214,7 @@ bool is_label_valid(const std::u32string_view label) {
               after.end());
     } else if (c == 0x200d) {
       if (i > 0) {
-        if (std::binary_search(std::begin(virama), std::end(virama),
-                               label[i - 1])) {
+        if (std::ranges::binary_search(virama, label[i - 1])) {
           return true;
         }
       }

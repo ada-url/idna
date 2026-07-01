@@ -178,3 +178,50 @@ TEST(to_ascii_tests, bidi_regression) {
   EXPECT_TRUE(ada::idna::to_ascii("a\u05D0.b").empty())
       << "multi-label should fail";
 }
+
+// Regression tests for the WHATWG URL "domain to ASCII" web-compatibility
+// carve-out: when the input domain is an ASCII string (beStrict = false), the
+// result is the input lowercased, regardless of Unicode ToASCII's outcome. An
+// ACE ("xn--") label may decode yet still fail IDNA validity criteria and must
+// nevertheless be accepted as-is.
+// See https://url.spec.whatwg.org/#concept-domain-to-ascii
+TEST(to_ascii_tests, ascii_xn_carveout) {
+  // Bare ACE prefix: the Punycode payload is empty. Previously rejected.
+  EXPECT_EQ(ada::idna::to_ascii("xn--"), "xn--");
+
+  // ContextJ (C1): xn--ab-j1t decodes to "a\u200Cb" (ZWNJ not preceded by a
+  // virama). Previously rejected; now accepted as-is.
+  EXPECT_EQ(ada::idna::to_ascii("xn--ab-j1t"), "xn--ab-j1t");
+
+  // Decoded label has code points with "mapped" status (enclosed CJK), so the
+  // ACE form is non-canonical. Previously rejected; now accepted as-is.
+  EXPECT_EQ(ada::idna::to_ascii("a.b.c.xn--pokxncvks"), "a.b.c.xn--pokxncvks");
+
+  // The URL spec's own example: xn--8i7caa decodes to fullwidth "www", whose
+  // code points have "mapped" status.
+  EXPECT_EQ(ada::idna::to_ascii("xn--8i7caa"), "xn--8i7caa");
+
+  // Mixed/upper-case ACE prefixes must be lowercased.
+  EXPECT_EQ(ada::idna::to_ascii("a.b.c.XN--pokxncvks"), "a.b.c.xn--pokxncvks");
+  EXPECT_EQ(ada::idna::to_ascii("a.b.c.Xn--pokxncvks"), "a.b.c.xn--pokxncvks");
+
+  // A plain already-ASCII domain is returned lowercased.
+  EXPECT_EQ(ada::idna::to_ascii("EXAMPLE.COM"), "example.com");
+
+  // Idempotency: to_ascii of an ASCII result is stable.
+  const std::string once = ada::idna::to_ascii("xn--ab-j1t");
+  EXPECT_EQ(ada::idna::to_ascii(once), once);
+}
+
+// The ASCII carve-out must NOT relax validation for non-ASCII inputs: those go
+// through full UTS#46 validation. Contrast xn--ab-j1t (ASCII, accepted above)
+// with its decoded form "a\u200Cb" supplied directly (non-ASCII, rejected).
+TEST(to_ascii_tests, non_ascii_inputs_still_validated) {
+  // ZWNJ (U+200C) without a preceding virama: ContextJ (C1) violation.
+  EXPECT_TRUE(ada::idna::to_ascii("a\u200Cb").empty())
+      << "non-ASCII ContextJ violation should still fail";
+
+  // LTR label containing an RTL code point: Bidi rule violation.
+  EXPECT_TRUE(ada::idna::to_ascii("a\u05D0").empty())
+      << "non-ASCII Bidi violation should still fail";
+}

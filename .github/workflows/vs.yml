@@ -9,10 +9,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # windows-latest now provisions the Windows Server 2025 image, which
-        # ships Visual Studio 2026 (v18) instead of VS 2022 (v17). Use the
-        # matching 'Visual Studio 18 2026' generator (requires CMake >= 4.2,
-        # already provided by the runner image). The job/check names keep the
+        # windows-latest now provisions the Windows Server 2025 image
+        # (windows-2025-vs2026), which ships Visual Studio 2026 (v18) instead of
+        # VS 2022 (v17). Use the matching 'Visual Studio 18 2026' generator. That
+        # generator was added in CMake 4.2, and the runner image ships CMake
+        # 4.3.x, so no extra CMake setup is required. The job/check names keep the
         # "vs17" prefix to avoid breaking required-status-check configuration.
         include:
           - {gen: Visual Studio 18 2026, arch: Win32, cfg: Release}

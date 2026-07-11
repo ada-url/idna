@@ -179,54 +179,186 @@ TEST(to_ascii_tests, bidi_regression) {
       << "multi-label should fail";
 }
 
+// Helper: domain-to-ASCII as URL Standard callers use it (to_ascii + forbidden
+// domain code point filter). Empty string means failure.
+static std::string domain_to_ascii(std::string_view input) {
+  std::string out = ada::idna::to_ascii(input);
+  if (ada::idna::contains_forbidden_domain_code_point(out)) {
+    return "";
+  }
+  return out;
+}
+
 // Regression tests for the WHATWG URL "domain to ASCII" web-compatibility
 // carve-out: when the input domain is an ASCII string (beStrict = false), the
 // result is the input lowercased, regardless of Unicode ToASCII's outcome. An
 // ACE ("xn--") label may decode yet still fail IDNA validity criteria and must
 // nevertheless be accepted as-is.
 // See https://url.spec.whatwg.org/#concept-domain-to-ascii
+//
+// Cases below are drawn from:
+// - WPT toascii.json (vendored as fixtures/toascii.json)
+// - WPT IdnaTestV2.json carve-out flips (null -> pass-through)
+// - WPT urltestdata.json hostnames that flipped failure -> success in Ada
+// - WPT setters_tests.json host/hostname "xn--" acceptance
+// - Ada URLPattern hostname unit tests (xn--a / XN--A)
 TEST(to_ascii_tests, ascii_xn_carveout) {
+  // --- Bare / empty ACE payload ---
   // Bare ACE prefix: the Punycode payload is empty. Previously rejected.
+  // WPT setters_tests / urltestdata: host "xn--" is accepted.
   EXPECT_EQ(ada::idna::to_ascii("xn--"), "xn--");
+  EXPECT_EQ(domain_to_ascii("xn--"), "xn--");
+  EXPECT_EQ(ada::idna::to_ascii("XN--"), "xn--");
+  // Trailing hyphen only in the ACE payload.
+  EXPECT_EQ(ada::idna::to_ascii("xn---"), "xn---");
 
-  // Invalid Punycode payload (WPT toascii.json "Invalid Punycode"): the ACE
-  // segment does not decode. Previously rejected; under the carve-out the
-  // ASCII input is returned lowercased. This is the case that broke Ada's
-  // URLPattern hostname unit test after the 0.6.0 bump
-  // (hostname "xn--a" must be accepted as "xn--a").
+  // --- Invalid Punycode (decode failure) ---
+  // WPT toascii.json "Invalid Punycode": the ACE segment does not decode.
+  // Ada URLPattern hostname "xn--a" must be accepted as "xn--a".
   EXPECT_EQ(ada::idna::to_ascii("xn--a"), "xn--a");
+  EXPECT_EQ(domain_to_ascii("xn--a"), "xn--a");
   EXPECT_EQ(ada::idna::to_ascii("XN--A"), "xn--a");
-  // Same invalid ACE as a label of a larger domain (IdnaTestV2 V7).
+  EXPECT_EQ(ada::idna::to_ascii("Xn--a"), "xn--a");
+  // Same invalid ACE as a label of a larger domain (IdnaTestV2 V7 / toascii).
   EXPECT_EQ(ada::idna::to_ascii("xn--a.pt"), "xn--a.pt");
+  EXPECT_EQ(ada::idna::to_ascii("xn--a.xn--zca"), "xn--a.xn--zca");
+  // Invalid ACE with trailing junk that remains ASCII (toascii.json).
+  EXPECT_EQ(ada::idna::to_ascii("xn--ls8h="), "xn--ls8h=");
+  // Invalid ACE that is pure digits after prefix (IdnaTestV2 / toascii).
+  EXPECT_EQ(ada::idna::to_ascii("xn--0"), "xn--0");
+  EXPECT_EQ(ada::idna::to_ascii("xn--0.com"), "xn--0.com");
+  EXPECT_EQ(ada::idna::to_ascii("xn--0.pt"), "xn--0.pt");
 
+  // --- Decode succeeds but IDNA validity fails (ContextJ / mapped / etc.) ---
   // ContextJ (C1): xn--ab-j1t decodes to "a\u200Cb" (ZWNJ not preceded by a
   // virama). Previously rejected; now accepted as-is.
   EXPECT_EQ(ada::idna::to_ascii("xn--ab-j1t"), "xn--ab-j1t");
+  // ContextJ (C2): ZWJ variant.
+  EXPECT_EQ(ada::idna::to_ascii("xn--ab-m1t"), "xn--ab-m1t");
+  // V1 / other validity failures that remain pure-ASCII ACE forms.
+  EXPECT_EQ(ada::idna::to_ascii("xn--u-ccb"), "xn--u-ccb");
+  EXPECT_EQ(ada::idna::to_ascii("xn--acom-0w1b"), "xn--acom-0w1b");
+  EXPECT_EQ(ada::idna::to_ascii("xn--a-ecp.ru"), "xn--a-ecp.ru");
+  EXPECT_EQ(ada::idna::to_ascii("xn--xn--a--gua.pt"), "xn--xn--a--gua.pt");
+  // Joiners ACE still accepted when input is pure ASCII (toascii CheckJoiners).
+  EXPECT_EQ(ada::idna::to_ascii("xn--1ug.example"), "xn--1ug.example");
+  EXPECT_EQ(ada::idna::to_ascii("xn--1ug"), "xn--1ug");
+  // Bidi ACE form accepted as ASCII (toascii CheckBidi counterpart).
+  EXPECT_EQ(ada::idna::to_ascii("xn--a-yoc"), "xn--a-yoc");
+  // U+FFFD encoded in Punycode is pure ASCII input -> accepted (toascii).
+  EXPECT_EQ(ada::idna::to_ascii("xn--zn7c.com"), "xn--zn7c.com");
 
   // Decoded label has code points with "mapped" status (enclosed CJK), so the
   // ACE form is non-canonical. Previously rejected; now accepted as-is.
+  // From Ada WPT urltestdata.json (failure -> success under carve-out).
   EXPECT_EQ(ada::idna::to_ascii("a.b.c.xn--pokxncvks"), "a.b.c.xn--pokxncvks");
+  EXPECT_EQ(ada::idna::to_ascii("10.0.0.xn--pokxncvks"),
+            "10.0.0.xn--pokxncvks");
 
   // The URL spec's own example: xn--8i7caa decodes to fullwidth "www", whose
   // code points have "mapped" status.
   EXPECT_EQ(ada::idna::to_ascii("xn--8i7caa"), "xn--8i7caa");
 
-  // Mixed/upper-case ACE prefixes must be lowercased.
+  // Double-encoded ACE prefix forms that remain pure ASCII (IdnaTestV2 flips).
+  EXPECT_EQ(ada::idna::to_ascii("xn--xn--bss-7z6ccid"), "xn--xn--bss-7z6ccid");
+  EXPECT_EQ(ada::idna::to_ascii("xn--xn---epa"), "xn--xn---epa");
+  EXPECT_EQ(ada::idna::to_ascii("xn--ASCII-"), "xn--ascii-");
+  EXPECT_EQ(ada::idna::to_ascii("xn--unicode-.org"), "xn--unicode-.org");
+
+  // Long ACE labels that previously failed validity (IdnaTestV2 C1/C2/A4).
+  EXPECT_EQ(
+      ada::idna::to_ascii(
+          "1.xn--"
+          "assbcssssssssdssssssssssssssssessssssssssssssssssssxssssssssssss"
+          "ssssssssysssssssssssssssssz-pxq1419aa69989dba9gc"),
+      "1.xn--"
+      "assbcssssssssdssssssssssssssssessssssssssssssssssssxssssssssssssssss"
+      "ssssysssssssssssssssssz-pxq1419aa69989dba9gc");
+  EXPECT_EQ(
+      ada::idna::to_ascii(
+          "1.xn--abcdexyz-qyacaaabaaaaaaabaaaaaaaaabaaaaaaaaabaaaaaaaa010ze"
+          "2isb1140zba8cc"),
+      "1.xn--abcdexyz-qyacaaabaaaaaaabaaaaaaaaabaaaaaaaaabaaaaaaaa010ze2isb"
+      "1140zba8cc");
+
+  // --- Case folding of ACE prefixes (urltestdata mixed-case hostnames) ---
   EXPECT_EQ(ada::idna::to_ascii("a.b.c.XN--pokxncvks"), "a.b.c.xn--pokxncvks");
   EXPECT_EQ(ada::idna::to_ascii("a.b.c.Xn--pokxncvks"), "a.b.c.xn--pokxncvks");
+  EXPECT_EQ(ada::idna::to_ascii("10.0.0.XN--pokxncvks"),
+            "10.0.0.xn--pokxncvks");
+  EXPECT_EQ(ada::idna::to_ascii("10.0.0.xN--pokxncvks"),
+            "10.0.0.xn--pokxncvks");
 
-  // A plain already-ASCII domain is returned lowercased.
+  // --- Ordinary pure-ASCII domains ---
   EXPECT_EQ(ada::idna::to_ascii("EXAMPLE.COM"), "example.com");
+  EXPECT_EQ(ada::idna::to_ascii("gOoGle.com"), "google.com");
+  // Labels with hyphens in 3rd/4th position (toascii.json, UseSTD3=false).
+  EXPECT_EQ(ada::idna::to_ascii("aa--"), "aa--");
+  EXPECT_EQ(ada::idna::to_ascii("ab--c"), "ab--c");
+  EXPECT_EQ(ada::idna::to_ascii("ab--cd.com"), "ab--cd.com");
+  // Leading / trailing hyphen labels (toascii.json).
+  EXPECT_EQ(ada::idna::to_ascii("-x"), "-x");
+  EXPECT_EQ(ada::idna::to_ascii("-foo.bar.com"), "-foo.bar.com");
+  EXPECT_EQ(ada::idna::to_ascii("foo-.bar.com"), "foo-.bar.com");
+  // Empty labels between dots (toascii.json).
+  EXPECT_EQ(ada::idna::to_ascii("x..xn--zca"), "x..xn--zca");
+  EXPECT_EQ(ada::idna::to_ascii("-x.xn--zca"), "-x.xn--zca");
+  EXPECT_EQ(ada::idna::to_ascii("x-.xn--zca"), "x-.xn--zca");
+  EXPECT_EQ(ada::idna::to_ascii("ab--c.xn--zca"), "ab--c.xn--zca");
+  EXPECT_EQ(ada::idna::to_ascii("xn--zca.xn--zca"), "xn--zca.xn--zca");
 
-  // Idempotency: to_ascii of an ASCII result is stable.
+  // Overlong labels / domains (toascii.json): still pure ASCII -> accepted.
+  EXPECT_EQ(
+      ada::idna::to_ascii(
+          "x01234567890123456789012345678901234567890123456789012345678901"
+          "x"),
+      "x01234567890123456789012345678901234567890123456789012345678901x");
+  EXPECT_EQ(
+      ada::idna::to_ascii(
+          "x01234567890123456789012345678901234567890123456789012345678901x."
+          "xn--zca"),
+      "x01234567890123456789012345678901234567890123456789012345678901x.xn--"
+      "zca");
+
+  // --- Idempotency ---
   const std::string once = ada::idna::to_ascii("xn--ab-j1t");
   EXPECT_EQ(ada::idna::to_ascii(once), once);
   EXPECT_EQ(ada::idna::to_ascii("xn--a"), "xn--a");
+  EXPECT_EQ(ada::idna::to_ascii(ada::idna::to_ascii("a.b.c.XN--pokxncvks")),
+            "a.b.c.xn--pokxncvks");
+  EXPECT_EQ(ada::idna::to_ascii(ada::idna::to_ascii("XN--")), "xn--");
+}
+
+// Table-driven mirror of the Ada urltestdata / setters carve-out hostnames:
+// every entry was previously failure (or rejected by set_host) and must now
+// round-trip through to_ascii as a lowercased ASCII domain.
+TEST(to_ascii_tests, ada_wpt_urltestdata_carveout_hosts) {
+  static constexpr std::pair<const char*, const char*> kCases[] = {
+      // urltestdata.json: mapped-status ACE labels
+      {"a.b.c.xn--pokxncvks", "a.b.c.xn--pokxncvks"},
+      {"10.0.0.xn--pokxncvks", "10.0.0.xn--pokxncvks"},
+      {"a.b.c.XN--pokxncvks", "a.b.c.xn--pokxncvks"},
+      {"a.b.c.Xn--pokxncvks", "a.b.c.xn--pokxncvks"},
+      {"10.0.0.XN--pokxncvks", "10.0.0.xn--pokxncvks"},
+      {"10.0.0.xN--pokxncvks", "10.0.0.xn--pokxncvks"},
+      // urltestdata.json / setters_tests.json: bare xn--
+      {"xn--", "xn--"},
+      {"XN--", "xn--"},
+      // file:// and https:// hosts that flipped failure -> success
+      {"xn--", "xn--"},
+  };
+  for (const auto& [input, expected] : kCases) {
+    SCOPED_TRACE(input);
+    EXPECT_EQ(domain_to_ascii(input), expected);
+    // Second application is a no-op (already lowercased ASCII).
+    EXPECT_EQ(domain_to_ascii(domain_to_ascii(input)), expected);
+  }
 }
 
 // The ASCII carve-out must NOT relax validation for non-ASCII inputs: those go
 // through full UTS#46 validation. Contrast xn--ab-j1t (ASCII, accepted above)
 // with its decoded form "a\u200Cb" supplied directly (non-ASCII, rejected).
+// Also covers toascii.json cases that remain failures for non-ASCII input.
 TEST(to_ascii_tests, non_ascii_inputs_still_validated) {
   // ZWNJ (U+200C) without a preceding virama: ContextJ (C1) violation.
   EXPECT_TRUE(ada::idna::to_ascii("a\u200Cb").empty())
@@ -235,4 +367,25 @@ TEST(to_ascii_tests, non_ascii_inputs_still_validated) {
   // LTR label containing an RTL code point: Bidi rule violation.
   EXPECT_TRUE(ada::idna::to_ascii("a\u05D0").empty())
       << "non-ASCII Bidi violation should still fail";
+
+  // toascii.json: CheckJoiners is true — bare ZWJ label fails.
+  EXPECT_TRUE(ada::idna::to_ascii("\u200D.example").empty())
+      << "non-ASCII ZWJ joiner should still fail";
+
+  // toascii.json: CheckBidi is true — Arabic + Latin fails.
+  EXPECT_TRUE(ada::idna::to_ascii("يa").empty())
+      << "non-ASCII Bidi (Arabic+Latin) should still fail";
+
+  // toascii.json: U+FFFD literal fails; contrast ACE form xn--zn7c.com above.
+  EXPECT_TRUE(ada::idna::to_ascii("\uFFFD.com").empty())
+      << "U+FFFD in domain should still fail";
+
+  // toascii.json: Invalid Punycode containing non-ASCII (xn--tešla) fails.
+  // UTF-8 for "xn--tešla" (š = U+0161 = C5 A1).
+  EXPECT_TRUE(ada::idna::to_ascii("xn--te\xc5\xa1la").empty())
+      << "invalid punycode with non-ASCII must not use the ASCII carve-out";
+
+  // toascii.json: xn--a.ß mixes invalid ACE with non-ASCII sharp-s -> fail.
+  EXPECT_TRUE(ada::idna::to_ascii("xn--a.\xc3\x9f").empty())
+      << "mixed invalid ACE + non-ASCII label should still fail";
 }

@@ -189,6 +189,16 @@ TEST(to_ascii_tests, ascii_xn_carveout) {
   // Bare ACE prefix: the Punycode payload is empty. Previously rejected.
   EXPECT_EQ(ada::idna::to_ascii("xn--"), "xn--");
 
+  // Invalid Punycode payload (WPT toascii.json "Invalid Punycode"): the ACE
+  // segment does not decode. Previously rejected; under the carve-out the
+  // ASCII input is returned lowercased. This is the case that broke Ada's
+  // URLPattern hostname unit test after the 0.6.0 bump
+  // (hostname "xn--a" must be accepted as "xn--a").
+  EXPECT_EQ(ada::idna::to_ascii("xn--a"), "xn--a");
+  EXPECT_EQ(ada::idna::to_ascii("XN--A"), "xn--a");
+  // Same invalid ACE as a label of a larger domain (IdnaTestV2 V7).
+  EXPECT_EQ(ada::idna::to_ascii("xn--a.pt"), "xn--a.pt");
+
   // ContextJ (C1): xn--ab-j1t decodes to "a\u200Cb" (ZWNJ not preceded by a
   // virama). Previously rejected; now accepted as-is.
   EXPECT_EQ(ada::idna::to_ascii("xn--ab-j1t"), "xn--ab-j1t");
@@ -211,6 +221,7 @@ TEST(to_ascii_tests, ascii_xn_carveout) {
   // Idempotency: to_ascii of an ASCII result is stable.
   const std::string once = ada::idna::to_ascii("xn--ab-j1t");
   EXPECT_EQ(ada::idna::to_ascii(once), once);
+  EXPECT_EQ(ada::idna::to_ascii("xn--a"), "xn--a");
 }
 
 // The ASCII carve-out must NOT relax validation for non-ASCII inputs: those go

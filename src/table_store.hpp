@@ -124,18 +124,18 @@ inline void ensure_tables() {
     composition_data =
         reinterpret_cast<const char32_t*>(at(table_blob::off_composition_data));
 
-    id_continue = reinterpret_cast<const uint32_t(*)[2]>(
-        at(table_blob::off_id_continue_flat));
+    id_continue =
+        reinterpret_cast<range_pair_ptr>(at(table_blob::off_id_continue_flat));
     id_start =
-        reinterpret_cast<const uint32_t(*)[2]>(at(table_blob::off_id_start_flat));
+        reinterpret_cast<range_pair_ptr>(at(table_blob::off_id_start_flat));
 
     dir_start =
         reinterpret_cast<const uint32_t*>(at(table_blob::off_dir_start));
     dir_final =
         reinterpret_cast<const uint32_t*>(at(table_blob::off_dir_final));
     dir_value = at(table_blob::off_dir_value);
-    combining_ranges = reinterpret_cast<const uint32_t(*)[2]>(
-        at(table_blob::off_combining_flat));
+    combining_ranges =
+        reinterpret_cast<range_pair_ptr>(at(table_blob::off_combining_flat));
 
     tables_ready.store(true, std::memory_order_release);
   });

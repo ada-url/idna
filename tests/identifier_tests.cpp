@@ -7,9 +7,9 @@
 
 #include "idna.h"
 
-// Pull in the raw Unicode range tables so the exhaustive test below can use
-// them as the ground truth against valid_name_code_point().
-#include "../src/id_tables.cpp"
+// Pull in the range tables (decompressed on first use) as ground truth for
+// valid_name_code_point().
+#include "../src/table_store.hpp"
 
 class IdnaTest : public testing::Test {
  protected:
@@ -64,8 +64,9 @@ TEST_F(IdnaTest, DISABLED_ExhaustiveAgainstIdTables) {
   //
   // The tables are sorted by range, so we walk them with rolling indices
   // (si, ci) that only ever advance — O(N + table_size) total work.
-  constexpr std::size_t id_start_n = std::size(ada::idna::id_start);
-  constexpr std::size_t id_continue_n = std::size(ada::idna::id_continue);
+  ada::idna::ensure_tables();
+  const std::size_t id_start_n = ada::idna::id_start_count;
+  const std::size_t id_continue_n = ada::idna::id_continue_count;
 
   std::size_t si = 0, ci = 0;
   for (uint32_t cp = 0; cp <= 0x10FFFF; ++cp) {
@@ -99,8 +100,9 @@ TEST_F(IdnaTest, SampledAgainstIdTables) {
   // and fast enough for the default test suite. The rolling table indices
   // still advance for every code point so they remain consistent at the
   // sampled positions.
-  constexpr std::size_t id_start_n = std::size(ada::idna::id_start);
-  constexpr std::size_t id_continue_n = std::size(ada::idna::id_continue);
+  ada::idna::ensure_tables();
+  const std::size_t id_start_n = ada::idna::id_start_count;
+  const std::size_t id_continue_n = ada::idna::id_continue_count;
 
   std::mt19937 rng(0xC0DE);
   std::uniform_int_distribution<int> pick(0, 99);

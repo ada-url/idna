@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 
+#include "table_store.hpp"
 #include "id_tables.cpp"
 
 namespace ada::idna {
@@ -19,6 +20,7 @@ constexpr bool is_ascii_letter_or_digit(char32_t c) noexcept {
 
 bool valid_name_code_point(char32_t code_point, bool first) {
   // https://tc39.es/ecma262/#prod-IdentifierStart
+  ensure_tables();
 
   // Fast paths
   if (first && (code_point == U'$' || code_point == U'_' ||
@@ -40,8 +42,10 @@ bool valid_name_code_point(char32_t code_point, bool first) {
   // Slow path: binary search through the appropriate Unicode range table.
   // Each entry is a [low, high] inclusive range.
   const std::span<const uint32_t[2]> ranges =
-      first ? std::span<const uint32_t[2]>{ada::idna::id_start}
-            : std::span<const uint32_t[2]>{ada::idna::id_continue};
+      first ? std::span<const uint32_t[2]>{ada::idna::id_start,
+                                           ada::idna::id_start_count}
+            : std::span<const uint32_t[2]>{ada::idna::id_continue,
+                                           ada::idna::id_continue_count};
 
   const auto iter = std::ranges::lower_bound(
       ranges, code_point, {},

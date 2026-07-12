@@ -57,21 +57,14 @@ SECTION_ORDER = [
     ("idna_stage2", "u16"),
     ("idna_bool_blocks", "u64"),
     ("idna_utf8_mappings", "u8"),
-    ("decomposition_cp", "u32"),
-    ("decomposition_offset", "u16"),
-    ("decomposition_length", "u8"),
-    ("decomposition_data16", "u16"),
-    ("decomposition_high_index", "u16"),
-    ("decomposition_high_cp", "u32"),
-    ("ccc_range_start", "u32"),
-    ("ccc_range_length", "u8"),
-    ("ccc_range_value", "u8"),
-    ("composition_sparse_page", "u16"),
-    ("composition_sparse_block", "u8"),
-    ("composition_block_flat", "u16"),
-    ("composition_data16", "u16"),
-    ("composition_high_index", "u16"),
-    ("composition_high_cp", "u32"),
+    ("decomposition_index", "u8"),
+    ("decomposition_block", "u16"),
+    ("decomposition_data", "u32"),
+    ("ccc_index", "u8"),
+    ("ccc_block", "u8"),
+    ("composition_index", "u8"),
+    ("composition_block", "u16"),
+    ("composition_data", "u32"),
     ("id_continue_flat", "u32"),
     ("id_start_flat", "u32"),
     ("dir_start", "u32"),
@@ -104,9 +97,9 @@ def _parse_blob_meta(text: str) -> dict[str, Any]:
     meta = {
         m.group(1): int(m.group(2))
         for m in re.finditer(
-            r"constexpr size_t (decomposition_count|decomposition_high_count|"
-            r"ccc_range_count|composition_sparse_count|composition_block_count|"
-            r"composition_high_count|id_continue_count|id_start_count|"
+            r"constexpr size_t (decomposition_block_rows|decomposition_block_cols|"
+            r"ccc_block_rows|ccc_block_cols|composition_block_rows|"
+            r"composition_block_cols|id_continue_count|id_start_count|"
             r"dir_table_count|combining_range_count) = (\d+);",
             text,
         )
@@ -176,17 +169,22 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
     assert zlib.decompress(compressed, -15) == uncompressed
 
     # Derive high-level counts used by table_store.hpp
+    # Fixed multi-stage dimensions (Unicode page tables).
     meta = {
-        "decomposition_count": len(sections["decomposition_cp"]),
-        "decomposition_high_count": len(sections["decomposition_high_index"]),
-        "ccc_range_count": len(sections["ccc_range_start"]),
-        "composition_sparse_count": len(sections["composition_sparse_page"]),
-        "composition_block_count": meta_in.get(
-            "composition_block_count",
-            len(sections["composition_block_flat"]) // 257,
+        "decomposition_block_rows": meta_in.get(
+            "decomposition_block_rows",
+            len(sections["decomposition_block"]) // 257,
         ),
-        "composition_high_count": len(sections["composition_high_index"]),
-        # id_*_flat stores pairs, so range count = len/2
+        "decomposition_block_cols": 257,
+        "ccc_block_rows": meta_in.get(
+            "ccc_block_rows", len(sections["ccc_block"]) // 256
+        ),
+        "ccc_block_cols": 256,
+        "composition_block_rows": meta_in.get(
+            "composition_block_rows",
+            len(sections["composition_block"]) // 257,
+        ),
+        "composition_block_cols": 257,
         "id_continue_count": len(sections["id_continue_flat"]) // 2,
         "id_start_count": len(sections["id_start_flat"]) // 2,
         "dir_table_count": len(sections["dir_start"]),

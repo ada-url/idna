@@ -49,8 +49,7 @@ inline const uint8_t* dir_value = nullptr;
 inline const uint32_t (*combining_ranges)[2] = nullptr;
 
 // Counts (also available as table_blob::*)
-inline constexpr size_t decomposition_count =
-    table_blob::decomposition_count;
+inline constexpr size_t decomposition_count = table_blob::decomposition_count;
 inline constexpr size_t decomposition_high_count =
     table_blob::decomposition_high_count;
 inline constexpr size_t ccc_range_count = table_blob::ccc_range_count;
@@ -77,9 +76,9 @@ inline void ensure_tables() {
     static std::unique_ptr<uint8_t[]> holder(
         new uint8_t[table_blob::uncompressed_size]);
     uint8_t* buffer = holder.get();
-    const size_t n = deflate::inflate_raw(
-        table_blob::compressed, table_blob::compressed_size, buffer,
-        table_blob::uncompressed_size);
+    const size_t n = deflate::inflate_raw(table_blob::compressed,
+                                          table_blob::compressed_size, buffer,
+                                          table_blob::uncompressed_size);
     if (n != table_blob::uncompressed_size) {
       // Tables are trusted build artifacts; a mismatch means a corrupt build.
       // Leave pointers null so subsequent use fails loudly rather than
@@ -90,16 +89,16 @@ inline void ensure_tables() {
 
     auto at = [&](size_t off) -> const uint8_t* { return buffer + off; };
 
-    idna_stage1 = reinterpret_cast<const uint16_t*>(
-        at(table_blob::off_idna_stage1));
-    idna_stage2 = reinterpret_cast<const uint16_t*>(
-        at(table_blob::off_idna_stage2));
-    idna_bool_blocks = reinterpret_cast<const uint64_t*>(
-        at(table_blob::off_idna_bool_blocks));
+    idna_stage1 =
+        reinterpret_cast<const uint16_t*>(at(table_blob::off_idna_stage1));
+    idna_stage2 =
+        reinterpret_cast<const uint16_t*>(at(table_blob::off_idna_stage2));
+    idna_bool_blocks =
+        reinterpret_cast<const uint64_t*>(at(table_blob::off_idna_bool_blocks));
     idna_utf8_mappings = at(table_blob::off_idna_utf8_mappings);
 
-    decomposition_cp = reinterpret_cast<const uint32_t*>(
-        at(table_blob::off_decomposition_cp));
+    decomposition_cp =
+        reinterpret_cast<const uint32_t*>(at(table_blob::off_decomposition_cp));
     decomposition_offset = reinterpret_cast<const uint16_t*>(
         at(table_blob::off_decomposition_offset));
     decomposition_length = at(table_blob::off_decomposition_length);
@@ -110,8 +109,8 @@ inline void ensure_tables() {
     decomposition_high_cp = reinterpret_cast<const char32_t*>(
         at(table_blob::off_decomposition_high_cp));
 
-    ccc_range_start = reinterpret_cast<const uint32_t*>(
-        at(table_blob::off_ccc_range_start));
+    ccc_range_start =
+        reinterpret_cast<const uint32_t*>(at(table_blob::off_ccc_range_start));
     ccc_range_length = at(table_blob::off_ccc_range_length);
     ccc_range_value = at(table_blob::off_ccc_range_value);
 
@@ -127,9 +126,9 @@ inline void ensure_tables() {
     composition_high_cp = reinterpret_cast<const char32_t*>(
         at(table_blob::off_composition_high_cp));
 
-    id_continue = reinterpret_cast<const uint32_t(*)[2]>(
+    id_continue = reinterpret_cast<const uint32_t (*)[2]>(
         at(table_blob::off_id_continue_flat));
-    id_start = reinterpret_cast<const uint32_t(*)[2]>(
+    id_start = reinterpret_cast<const uint32_t (*)[2]>(
         at(table_blob::off_id_start_flat));
 
     dir_start =
@@ -137,15 +136,14 @@ inline void ensure_tables() {
     dir_final =
         reinterpret_cast<const uint32_t*>(at(table_blob::off_dir_final));
     dir_value = at(table_blob::off_dir_value);
-    combining_ranges = reinterpret_cast<const uint32_t(*)[2]>(
+    combining_ranges = reinterpret_cast<const uint32_t (*)[2]>(
         at(table_blob::off_combining_flat));
   });
 }
 
 // Row accessor for the flat composition block table.
 inline const uint16_t* composition_block_row(uint8_t block_index) noexcept {
-  return composition_block_flat +
-         static_cast<size_t>(block_index) * 257u;
+  return composition_block_flat + static_cast<size_t>(block_index) * 257u;
 }
 
 }  // namespace ada::idna

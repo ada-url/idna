@@ -52,9 +52,8 @@ inline static direction find_direction(uint32_t code_point) noexcept {
   if (lo == dir_table_count) {
     return direction::NONE;
   }
-  return code_point >= dir_start[lo]
-             ? static_cast<direction>(dir_value[lo])
-             : direction::NONE;
+  return code_point >= dir_start[lo] ? static_cast<direction>(dir_value[lo])
+                                     : direction::NONE;
 }
 
 inline static size_t find_last_not_of_nsm(
@@ -106,10 +105,9 @@ bool is_label_valid(const std::u32string_view label) {
   ensure_tables();
   // Range membership via lower_bound on range end.
   const std::span<const uint32_t[2]> comb_span{combining_ranges,
-                                                combining_range_count};
+                                               combining_range_count};
   const auto comb_it = std::ranges::lower_bound(
-      comb_span, label.front(), {},
-      [](const auto& range) { return range[1]; });
+      comb_span, label.front(), {}, [](const auto& range) { return range[1]; });
   if (comb_it != comb_span.end() && label.front() >= (*comb_it)[0]) {
     return false;
   }

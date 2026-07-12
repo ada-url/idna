@@ -1,6 +1,7 @@
 // Runtime store for compressed Unicode/IDNA tables.
-// Large tables are stored DEFLATE-compressed and expanded once on first use
-// into a BSS buffer (does not increase binary size).
+// Large tables are stored DEFLATE-compressed (read-only .rodata) and expanded
+// once on first use into a heap buffer so the working set does not bloat the
+// on-disk binary.
 #pragma once
 
 #include "raw_inflate.hpp"
@@ -13,7 +14,32 @@
 
 namespace ada::idna {
 
-// --- Mapping tables ----------------------------------------------------------
+// --- Blob layout invariants (guards scripts/pack_tables.py output) -----------
+// Composition rows are 257 uint16 entries (range endpoints for 256 code
+// points).
+inline constexpr size_t kCompositionRowWidth = 257;
+static_assert(table_blob::count_composition_block_flat ==
+                  table_blob::composition_block_count * kCompositionRowWidth,
+              "composition_block_flat size must be block_count * 257");
+static_assert(table_blob::count_dir_start == table_blob::dir_table_count &&
+                  table_blob::count_dir_final == table_blob::dir_table_count &&
+                  table_blob::count_dir_value == table_blob::dir_table_count,
+              "bidi direction SoA arrays must share dir_table_count");
+static_assert(table_blob::count_id_continue_flat ==
+                  table_blob::id_continue_count * 2,
+              "id_continue_flat stores [low, high] pairs");
+static_assert(table_blob::count_id_start_flat == table_blob::id_start_count * 2,
+              "id_start_flat stores [low, high] pairs");
+static_assert(table_blob::count_combining_flat ==
+                  table_blob::combining_range_count * 2,
+              "combining_flat stores [low, high] pairs");
+// Natural alignment for multi-byte fields after packing.
+static_assert(table_blob::off_idna_stage1 % alignof(uint16_t) == 0);
+static_assert(table_blob::off_idna_bool_blocks % alignof(uint64_t) == 0);
+static_assert(table_blob::off_decomposition_cp % alignof(uint32_t) == 0);
+static_assert(table_blob::off_dir_start % alignof(uint32_t) == 0);
+
+// --- Mapping tables (immutable after ensure_tables) --------------------------
 inline const uint16_t* idna_stage1 = nullptr;
 inline const uint16_t* idna_stage2 = nullptr;
 inline const uint64_t* idna_bool_blocks = nullptr;
@@ -42,7 +68,9 @@ inline const char32_t* composition_high_cp = nullptr;
 inline const uint32_t (*id_continue)[2] = nullptr;
 inline const uint32_t (*id_start)[2] = nullptr;
 
-// --- Validity tables ---------------------------------------------------------
+// --- Validity tables (structure-of-arrays; all const after load) -------------
+// Replaces the old packed {start, final, direction} struct array so every field
+// stays in read-only storage inside the compressed blob until first use.
 inline const uint32_t* dir_start = nullptr;
 inline const uint32_t* dir_final = nullptr;
 inline const uint8_t* dir_value = nullptr;
@@ -143,7 +171,8 @@ inline void ensure_tables() {
 
 // Row accessor for the flat composition block table.
 inline const uint16_t* composition_block_row(uint8_t block_index) noexcept {
-  return composition_block_flat + static_cast<size_t>(block_index) * 257u;
+  return composition_block_flat +
+         static_cast<size_t>(block_index) * kCompositionRowWidth;
 }
 
 }  // namespace ada::idna

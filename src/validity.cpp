@@ -33,7 +33,8 @@ enum direction : uint8_t {
   LRE
 };
 
-// dir_table data lives in the compressed blob (table_store.hpp).
+// Bidi direction ranges live in the compressed blob as const SoA arrays
+// (dir_start / dir_final / dir_value). See table_store.hpp layout asserts.
 
 // CheckJoiners and CheckBidi are true for URL specification.
 

@@ -75,9 +75,15 @@ void decompose(std::u32string& input, size_t additional_elements) {
         decomposition_length = 0;
       }
       if (decomposition_length > 0) {
-        while (decomposition_length-- > 0) {
-          input[--descending_idx] = decomposition_data[(decomposition[0] >> 2) +
-                                                       decomposition_length];
+        const size_t base = static_cast<size_t>(decomposition[0] >> 2);
+        if (base + decomposition_length > decomposition_data_size) {
+          // Corrupt mapping offsets - keep original scalar.
+          input[--descending_idx] = input[input_count];
+        } else {
+          while (decomposition_length-- > 0) {
+            input[--descending_idx] =
+                decomposition_data[base + decomposition_length];
+          }
         }
       } else {
         input[--descending_idx] = input[input_count];
@@ -170,18 +176,27 @@ void compose(std::u32string& input) {
         if (composition[1] != composition[0] && previous_ccc < ccc) {
           int left = composition[0];
           int right = composition[1];
+          // Pair list is [combiner, result, ...]; reject corrupt ranges.
+          if (left < 0 || right < left ||
+              static_cast<size_t>(right) > composition_data_size) {
+            break;
+          }
           while (left + 2 < right) {
             int middle = left + (((right - left) >> 1) & ~1);
-            if (composition_data[middle] <= input[input_count + 1]) {
+            if (composition_data[static_cast<size_t>(middle)] <=
+                input[input_count + 1]) {
               left = middle;
             }
-            if (composition_data[middle] >= input[input_count + 1]) {
+            if (composition_data[static_cast<size_t>(middle)] >=
+                input[input_count + 1]) {
               right = middle;
             }
           }
-          if (composition_data[left] == input[input_count + 1]) {
-            input[initial_composition_count] = composition_data[left + 1];
-            char32_t composed = composition_data[left + 1];
+          if (static_cast<size_t>(left + 1) < composition_data_size &&
+              composition_data[static_cast<size_t>(left)] ==
+                  input[input_count + 1]) {
+            char32_t composed = composition_data[static_cast<size_t>(left + 1)];
+            input[initial_composition_count] = composed;
             composition =
                 composition_block_row(composition_index[composed >> 8]) +
                 (composed % 256);
@@ -208,7 +223,12 @@ void normalize(std::u32string& input) {
    * Normalize the domain_name string to Unicode Normalization Form C.
    * @see https://www.unicode.org/reports/tr46/#ProcessingStepNormalize
    */
-  ensure_tables();
+  if (!ensure_tables() || decomposition_index == nullptr ||
+      composition_index == nullptr) {
+    // Without tables we cannot produce NFC; leave input unchanged so callers
+    // that re-check NFC (e.g. to_unicode) will reject the label.
+    return;
+  }
   decompose_nfc(input);
   compose(input);
 }

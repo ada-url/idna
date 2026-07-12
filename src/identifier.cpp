@@ -20,9 +20,8 @@ constexpr bool is_ascii_letter_or_digit(char32_t c) noexcept {
 
 bool valid_name_code_point(char32_t code_point, bool first) {
   // https://tc39.es/ecma262/#prod-IdentifierStart
-  ensure_tables();
 
-  // Fast paths
+  // Fast paths (no table needed)
   if (first && (code_point == U'$' || code_point == U'_' ||
                 is_ascii_letter(code_point))) {
     return true;
@@ -36,6 +35,10 @@ bool valid_name_code_point(char32_t code_point, bool first) {
     return false;
   }
   if (code_point >= 0xD800 && code_point <= 0xDFFF) {
+    return false;
+  }
+
+  if (!ensure_tables() || id_start == nullptr || id_continue == nullptr) {
     return false;
   }
 

@@ -12,7 +12,8 @@ struct BitReader {
   uint32_t acc = 0;
   int bits = 0;
 
-  explicit BitReader(const uint8_t* data, size_t len) : p(data), end(data + len) {}
+  explicit BitReader(const uint8_t* data, size_t len)
+      : p(data), end(data + len) {}
 
   bool ensure(int n) {
     while (bits < n) {
@@ -110,7 +111,8 @@ struct Huff {
     }
     // store base into counts reuse - keep first_code and counts
     for (int bits = 1; bits <= max_bits; bits++) {
-      // first_code already set; store base index in a side array - reuse symbols layout
+      // first_code already set; store base index in a side array - reuse
+      // symbols layout
     }
     // Copy base into first_code's sibling - use lengths[0] area no
     // Store base in first_code after using it for decode differently
@@ -118,8 +120,8 @@ struct Huff {
     return true;
   }
 
-  // Need base offsets for decode - store in first_code as code start, counts as count
-  // Add base_idx
+  // Need base offsets for decode - store in first_code as code start, counts as
+  // count Add base_idx
   int base_idx[MAXBITS + 1]{};
 
   bool build2(const uint8_t* lens, int n) {
@@ -202,20 +204,21 @@ inline int fixed_dist(BitReader& br) {
 
 // length and distance base tables
 static const uint16_t len_base[29] = {
-  3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258
-};
-static const uint8_t len_extra[29] = {
-  0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0
-};
+    3,  4,  5,  6,  7,  8,  9,  10, 11,  13,  15,  17,  19,  23, 27,
+    31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258};
+static const uint8_t len_extra[29] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                                      1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+                                      4, 4, 4, 4, 5, 5, 5, 5, 0};
 static const uint16_t dist_base[30] = {
-  1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577
-};
-static const uint8_t dist_extra[30] = {
-  0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13
-};
+    1,    2,    3,    4,    5,    7,    9,    13,    17,    25,
+    33,   49,   65,   97,   129,  193,  257,  385,   513,   769,
+    1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
+static const uint8_t dist_extra[30] = {0, 0, 0,  0,  1,  1,  2,  2,  3,  3,
+                                       4, 4, 5,  5,  6,  6,  7,  7,  8,  8,
+                                       9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
 
-inline size_t inflate_raw(const uint8_t* src, size_t src_len,
-                          uint8_t* dst, size_t dst_cap) {
+inline size_t inflate_raw(const uint8_t* src, size_t src_len, uint8_t* dst,
+                          size_t dst_cap) {
   BitReader br(src, src_len);
   size_t out = 0;
   for (;;) {
@@ -233,8 +236,8 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len,
       uint32_t nlen = br.get(16);
       if (len == UINT32_MAX || nlen == UINT32_MAX) return 0;
       if ((len ^ 0xFFFF) != nlen) return 0;
-      // After get, may have bits in acc from previous - for stored, should be byte aligned
-      // Copy len bytes from p
+      // After get, may have bits in acc from previous - for stored, should be
+      // byte aligned Copy len bytes from p
       if (br.bits != 0) {
         // leftover bits should be 0 if aligned
       }
@@ -249,10 +252,17 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len,
         // use fixed via functions
       } else {
         // dynamic
-        uint32_t hlit = br.get(5); if (hlit == UINT32_MAX) return 0; hlit += 257;
-        uint32_t hdist = br.get(5); if (hdist == UINT32_MAX) return 0; hdist += 1;
-        uint32_t hclen = br.get(4); if (hclen == UINT32_MAX) return 0; hclen += 4;
-        static const int order[19] = {16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15};
+        uint32_t hlit = br.get(5);
+        if (hlit == UINT32_MAX) return 0;
+        hlit += 257;
+        uint32_t hdist = br.get(5);
+        if (hdist == UINT32_MAX) return 0;
+        hdist += 1;
+        uint32_t hclen = br.get(4);
+        if (hclen == UINT32_MAX) return 0;
+        hclen += 4;
+        static const int order[19] = {16, 17, 18, 0, 8,  7, 9,  6, 10, 5,
+                                      11, 4,  12, 3, 13, 2, 14, 1, 15};
         uint8_t clen[19]{};
         for (uint32_t i = 0; i < hclen; i++) {
           uint32_t v = br.get(3);
@@ -263,31 +273,40 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len,
         if (!cl.build2(clen, 19)) return 0;
         uint8_t lens[288 + 32]{};
         uint32_t n = hlit + hdist;
-        for (uint32_t i = 0; i < n; ) {
+        for (uint32_t i = 0; i < n;) {
           int sym = cl.decode(br);
           if (sym < 0) return 0;
           if (sym < 16) {
             lens[i++] = uint8_t(sym);
           } else if (sym == 16) {
-            uint32_t rep = br.get(2); if (rep == UINT32_MAX) return 0; rep += 3;
+            uint32_t rep = br.get(2);
+            if (rep == UINT32_MAX) return 0;
+            rep += 3;
             if (i == 0) return 0;
             uint8_t v = lens[i - 1];
             while (rep--) lens[i++] = v;
           } else if (sym == 17) {
-            uint32_t rep = br.get(3); if (rep == UINT32_MAX) return 0; rep += 3;
+            uint32_t rep = br.get(3);
+            if (rep == UINT32_MAX) return 0;
+            rep += 3;
             while (rep--) lens[i++] = 0;
           } else if (sym == 18) {
-            uint32_t rep = br.get(7); if (rep == UINT32_MAX) return 0; rep += 11;
+            uint32_t rep = br.get(7);
+            if (rep == UINT32_MAX) return 0;
+            rep += 11;
             while (rep--) lens[i++] = 0;
-          } else return 0;
+          } else
+            return 0;
         }
         if (!lit.build2(lens, int(hlit))) return 0;
         if (!dist.build2(lens + hlit, int(hdist))) return 0;
       }
       for (;;) {
         int sym;
-        if (btype == 1) sym = fixed_litlen(br);
-        else sym = lit.decode(br);
+        if (btype == 1)
+          sym = fixed_litlen(br);
+        else
+          sym = lit.decode(br);
         if (sym < 0) return 0;
         if (sym < 256) {
           if (out >= dst_cap) return 0;
@@ -299,10 +318,13 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len,
           if (len_code < 0 || len_code > 28) return 0;
           uint32_t extra = br.get(len_extra[len_code]);
           if (len_extra[len_code] && extra == UINT32_MAX) return 0;
-          uint32_t length = len_base[len_code] + (len_extra[len_code] ? extra : 0);
+          uint32_t length =
+              len_base[len_code] + (len_extra[len_code] ? extra : 0);
           int dsym;
-          if (btype == 1) dsym = fixed_dist(br);
-          else dsym = dist.decode(br);
+          if (btype == 1)
+            dsym = fixed_dist(br);
+          else
+            dsym = dist.decode(br);
           if (dsym < 0 || dsym > 29) return 0;
           uint32_t dextra = br.get(dist_extra[dsym]);
           if (dist_extra[dsym] && dextra == UINT32_MAX) return 0;
@@ -315,11 +337,11 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len,
         }
       }
     } else {
-      return 0; // reserved
+      return 0;  // reserved
     }
     if (bfinal) break;
   }
   return out;
 }
 
-}  // namespace
+}  // namespace ada::idna::deflate

@@ -1,4 +1,5 @@
 #include "ada/idna/normalization.h"
+#include "table_store.hpp"
 #include "normalization_tables.cpp"
 
 #include <algorithm>
@@ -191,7 +192,7 @@ void compose(std::u32string& input) {
       uint8_t bi = composition_block_for_page(
           static_cast<uint32_t>(input[input_count]) >> 8);
       const uint16_t* composition =
-          &composition_block[bi][input[input_count] % 256];
+          composition_block_row(bi) + (input[input_count] % 256);
       size_t initial_composition_count = composition_count;
       for (int32_t previous_ccc = -1; input_count + 1 < input.size();
            input_count++) {
@@ -220,7 +221,7 @@ void compose(std::u32string& input) {
             char32_t composed = input[initial_composition_count];
             bi = composition_block_for_page(static_cast<uint32_t>(composed) >>
                                             8);
-            composition = &composition_block[bi][composed % 256];
+            composition = composition_block_row(bi) + (composed % 256);
             continue;
           }
         }
@@ -244,6 +245,7 @@ void normalize(std::u32string& input) {
    * Normalize the domain_name string to Unicode Normalization Form C.
    * @see https://www.unicode.org/reports/tr46/#ProcessingStepNormalize
    */
+  ensure_tables();
   decompose_nfc(input);
   compose(input);
 }

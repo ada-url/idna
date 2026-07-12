@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 
+#include "table_store.hpp"
 #include "mapping_tables.cpp"
 
 namespace ada::idna {
@@ -22,6 +23,7 @@ namespace ada::idna {
 // no Unicode version-specific values are hardcoded here.
 //
 static uint16_t idna_lookup(uint32_t cp) noexcept {
+  ensure_tables();
   // -- Two-level table covers the full active code-point range ---------------
   if (cp < IDNA_LOW_RANGE_END) {
     uint16_t ref = idna_stage1[cp >> IDNA_BLOCK_BITS];

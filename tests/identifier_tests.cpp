@@ -64,7 +64,7 @@ TEST_F(IdnaTest, DISABLED_ExhaustiveAgainstIdTables) {
   //
   // The tables are sorted by range, so we walk them with rolling indices
   // (si, ci) that only ever advance — O(N + table_size) total work.
-  ada::idna::ensure_tables();
+  ASSERT_TRUE(ada::idna::ensure_tables());
   const std::size_t id_start_n = ada::idna::id_start_count;
   const std::size_t id_continue_n = ada::idna::id_continue_count;
 
@@ -100,7 +100,7 @@ TEST_F(IdnaTest, SampledAgainstIdTables) {
   // and fast enough for the default test suite. The rolling table indices
   // still advance for every code point so they remain consistent at the
   // sampled positions.
-  ada::idna::ensure_tables();
+  ASSERT_TRUE(ada::idna::ensure_tables());
   const std::size_t id_start_n = ada::idna::id_start_count;
   const std::size_t id_continue_n = ada::idna::id_continue_count;
 

@@ -82,7 +82,10 @@ bool is_label_valid(const std::u32string_view label) {
   if (label.empty()) {
     return true;
   }
-  ensure_tables();
+  if (!ensure_tables() || combining_ranges == nullptr || dir_start == nullptr ||
+      dir_final == nullptr || dir_value == nullptr) {
+    return false;
+  }
 
   ///////////////
   // We have a normalization step which ensures that we are in NFC.

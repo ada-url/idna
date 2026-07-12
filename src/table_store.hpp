@@ -60,14 +60,16 @@ inline const uint16_t* composition_block_flat = nullptr;
 inline const char32_t* composition_data = nullptr;
 
 // --- Identifier --------------------------------------------------------------
-inline const uint32_t (*id_continue)[2] = nullptr;
-inline const uint32_t (*id_start)[2] = nullptr;
+// Pointer-to-array alias (stable under clang-format 17 vs newer).
+using range_pair_ptr = const uint32_t (*)[2];
+inline range_pair_ptr id_continue = nullptr;
+inline range_pair_ptr id_start = nullptr;
 
 // --- Validity (const SoA) ----------------------------------------------------
 inline const uint32_t* dir_start = nullptr;
 inline const uint32_t* dir_final = nullptr;
 inline const uint8_t* dir_value = nullptr;
-inline const uint32_t (*combining_ranges)[2] = nullptr;
+inline range_pair_ptr combining_ranges = nullptr;
 
 inline constexpr size_t id_continue_count = table_blob::id_continue_count;
 inline constexpr size_t id_start_count = table_blob::id_start_count;

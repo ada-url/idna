@@ -107,25 +107,30 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   }
   utf32.resize(actual_utf32_length);
 
-  std::u32string tmp_buffer;
+  std::u32string mapped;
+  std::u32string scratch;
   std::u32string post_map;
-  if (!ada::idna::map(utf32, tmp_buffer)) {
+  if (!ada::idna::map(utf32, mapped)) {
     return false;
   }
-  utf32 = std::move(tmp_buffer);
-  if (!normalize(utf32)) {
-    return false;
+  // ASCII is already NFC; skip the (expensive) normalize pass when mapping
+  // produced only ASCII (common: e.g. U+00DF LATIN SMALL LETTER SHARP S ->
+  // "ss").
+  if (!is_ascii(mapped)) {
+    if (!normalize(mapped)) {
+      return false;
+    }
   }
   out.reserve(ut8_string.size());
   size_t label_start = 0;
 
-  while (label_start != utf32.size()) {
-    size_t loc_dot = utf32.find('.', label_start);
+  while (label_start != mapped.size()) {
+    size_t loc_dot = mapped.find('.', label_start);
     bool is_last_label = (loc_dot == std::string_view::npos);
     size_t label_size =
-        is_last_label ? utf32.size() - label_start : loc_dot - label_start;
+        is_last_label ? mapped.size() - label_start : loc_dot - label_start;
     size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
-    std::u32string_view label_view(utf32.data() + label_start, label_size);
+    std::u32string_view label_view(mapped.data() + label_start, label_size);
     label_start += label_size_with_dot;
     if (label_size == 0) {
       // empty label? Nothing to do.
@@ -144,31 +149,29 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
       }
       std::string_view puny_segment_ascii(out.data() + label_out_start + 4,
                                           label_size - 4);
-      tmp_buffer.clear();
-      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
+      scratch.clear();
+      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, scratch);
       if (!is_ok) {
         out.clear();
         return false;
       }
-      if (is_ascii(tmp_buffer)) {
+      if (is_ascii(scratch)) {
         out.clear();
         return false;
       }
-      if (!ada::idna::map(tmp_buffer, post_map)) {
+      if (!ada::idna::map(scratch, post_map)) {
         out.clear();
         return false;
       }
-      if (tmp_buffer != post_map) {
+      if (scratch != post_map) {
         out.clear();
         return false;
       }
-      if (!normalize(post_map)) {
-        out.clear();
-        return false;
-      }
-      if (post_map != tmp_buffer) {
-        out.clear();
-        return false;
+      if (!is_ascii(post_map)) {
+        if (!normalize(post_map) || post_map != scratch) {
+          out.clear();
+          return false;
+        }
       }
       if (post_map.empty()) {
         out.clear();

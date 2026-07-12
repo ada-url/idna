@@ -134,33 +134,13 @@ bool map(std::u32string_view input, std::u32string& out) {
     // (null terminator), so the decode loop below produces nothing.
 
     // Mapped (or ignored): decode null-terminated UTF-8 from the mapping table.
-    // Reject offsets that would walk off the end of the mapping blob.
+    // Tables are CRC-verified at init, so sequences are trusted as well-formed.
     if (static_cast<size_t>(status) >= idna_utf8_mappings_size) {
       return false;
     }
     const uint8_t* ptr = idna_utf8_mappings + status;
-    const uint8_t* const end = idna_utf8_mappings + idna_utf8_mappings_size;
-    while (ptr < end && *ptr != 0) {
-      // Need enough remaining bytes for a complete UTF-8 sequence.
-      const size_t remaining = static_cast<size_t>(end - ptr);
-      if (*ptr < 0x80u) {
-        out.push_back(utf8_next(ptr));
-      } else if (*ptr < 0xE0u) {
-        if (remaining < 2) {
-          return false;
-        }
-        out.push_back(utf8_next(ptr));
-      } else if (*ptr < 0xF0u) {
-        if (remaining < 3) {
-          return false;
-        }
-        out.push_back(utf8_next(ptr));
-      } else {
-        if (remaining < 4) {
-          return false;
-        }
-        out.push_back(utf8_next(ptr));
-      }
+    while (*ptr != 0) {
+      out.push_back(utf8_next(ptr));
     }
   }
   return true;

@@ -22,8 +22,8 @@ namespace ada::idna {
 // (LOW_RANGE_END, HIGH_IGNORED_*) are generated from the IDNA table itself;
 // no Unicode version-specific values are hardcoded here.
 //
+// Assumes ensure_tables() has already been called by the public entry point.
 static uint16_t idna_lookup(uint32_t cp) noexcept {
-  ensure_tables();
   // -- Two-level table covers the full active code-point range ---------------
   if (cp < IDNA_LOW_RANGE_END) {
     uint16_t ref = idna_stage1[cp >> IDNA_BLOCK_BITS];
@@ -116,6 +116,7 @@ bool map(std::u32string_view input, std::u32string& out) {
   //    the mapping in Section 5, [IDNA Mapping
   //    Table](https://www.unicode.org/reports/tr46/#IDNA_Mapping_Table).
   //    * valid: Leave the code point unchanged in the string.
+  ensure_tables();
   out.clear();
   out.reserve(input.size());
   for (char32_t x : input) {

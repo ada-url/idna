@@ -38,8 +38,8 @@ enum direction : uint8_t {
 
 // CheckJoiners and CheckBidi are true for URL specification.
 
+// Assumes ensure_tables() has already been called by is_label_valid().
 inline static direction find_direction(uint32_t code_point) noexcept {
-  ensure_tables();
   // Binary search on dir_final (sorted upper bounds).
   size_t lo = 0, hi = dir_table_count;
   while (lo < hi) {
@@ -82,6 +82,7 @@ bool is_label_valid(const std::u32string_view label) {
   if (label.empty()) {
     return true;
   }
+  ensure_tables();
 
   ///////////////
   // We have a normalization step which ensures that we are in NFC.
@@ -103,7 +104,6 @@ bool is_label_valid(const std::u32string_view label) {
   // if (label.find('.') != std::string_view::npos) return false;
 
   // The label must not begin with a combining mark.
-  ensure_tables();
   // Range membership via lower_bound on range end.
   const std::span<const uint32_t[2]> comb_span{combining_ranges,
                                                combining_range_count};

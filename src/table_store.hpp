@@ -11,8 +11,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
-#include <memory>
-#include <mutex>
+#include <new>
 
 namespace ada::idna {
 
@@ -85,23 +84,33 @@ inline constexpr size_t kCccBlockCols = table_blob::ccc_block_cols;  // 256
 inline constexpr size_t kCompBlockCols =
     table_blob::composition_block_cols;  // 257
 
-// Fast path: avoid call_once synchronization after first init.
-inline std::atomic<bool> tables_ready{false};
+// One-time init without mutex/call_once: atomic state + spin-wait.
+//   0 = uninit, 1 = in progress, 2 = ready, 3 = failed
+inline std::atomic<uint8_t> tables_init_state{0};
+// Owned by the winning init thread; lives for the process lifetime.
+inline uint8_t* tables_buffer = nullptr;
 
-inline void ensure_tables() {
-  if (tables_ready.load(std::memory_order_acquire)) {
+inline void ensure_tables() noexcept {
+  uint8_t state = tables_init_state.load(std::memory_order_acquire);
+  if (state == 2 || state == 3) {
     return;
   }
-  static std::once_flag once;
-  std::call_once(once, [] {
-    static std::unique_ptr<uint8_t[]> holder(
-        new uint8_t[table_blob::uncompressed_size]);
-    uint8_t* buffer = holder.get();
+
+  uint8_t expected = 0;
+  if (tables_init_state.compare_exchange_strong(
+          expected, 1, std::memory_order_acq_rel, std::memory_order_acquire)) {
+    // This thread performs decompression and publishes pointers.
+    uint8_t* buffer = new (std::nothrow) uint8_t[table_blob::uncompressed_size];
+    if (buffer == nullptr) {
+      tables_init_state.store(3, std::memory_order_release);
+      return;
+    }
     const size_t n = deflate::inflate_raw(table_blob::compressed,
                                           table_blob::compressed_size, buffer,
                                           table_blob::uncompressed_size);
     if (n != table_blob::uncompressed_size) {
-      holder.reset();
+      delete[] buffer;
+      tables_init_state.store(3, std::memory_order_release);
       return;
     }
 
@@ -141,8 +150,30 @@ inline void ensure_tables() {
     combining_ranges =
         reinterpret_cast<range_pair_ptr>(at(table_blob::off_combining_flat));
 
-    tables_ready.store(true, std::memory_order_release);
-  });
+    tables_buffer = buffer;
+    // Publish pointers before READY so waiters never observe null tables.
+    tables_init_state.store(2, std::memory_order_release);
+    return;
+  }
+
+  // Another thread is initializing (or already finished after our load).
+  while (true) {
+    state = tables_init_state.load(std::memory_order_acquire);
+    if (state == 2 || state == 3) {
+      return;
+    }
+    // Brief spin; inflate is short-lived (~1 ms) so a mutex is unnecessary.
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
+    defined(_M_IX86)
+#if defined(__GNUC__) || defined(__clang__)
+    __builtin_ia32_pause();
+#endif
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__GNUC__) || defined(__clang__)
+    asm volatile("yield" ::: "memory");
+#endif
+#endif
+  }
 }
 
 // O(1) multi-stage accessors matching the original uni-algo layout.

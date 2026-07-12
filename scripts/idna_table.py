@@ -253,7 +253,11 @@ def emit_array_uint64(name, data, cols=4):
     return '\n'.join(lines)
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
-def print_idna():
+def generate_idna():
+    """Build mapping tables from IdnaMappingTable.txt.
+
+    Returns a dict with constants and array payloads suitable for packing.
+    """
     table_data = get_table()
     version    = get_version(table_data)
     entries    = parse_idna(table_data)
@@ -270,18 +274,47 @@ def print_idna():
     flat, utf8_table, seq_to_idx = build_flat_and_mappings(entries, low_range_end)
     stage1, mixed_data, bool_words = build_two_level(flat)
 
-    n_stage1    = len(stage1)
-    n_mixed     = len(mixed_data)
-    n_bool      = len(bool_words)
-    n_utf8      = len(utf8_table)
-
-    total_bytes = (n_stage1 * 2) + (n_mixed * 2) + (n_bool * 8) + n_utf8
-
     # Validate utf8 table entries will fit in uint16_t sentinels
     assert len(utf8_table) < 0xFFFD, \
         f"UTF-8 table too large: {len(utf8_table)} bytes, max 0xFFFD"
-    assert n_stage1 <= 0x8000, \
-        f"stage1 too large: {n_stage1} entries"
+    assert len(stage1) <= 0x8000, \
+        f"stage1 too large: {len(stage1)} entries"
+
+    return {
+        "version": version,
+        "block_bits": BLOCK_BITS,
+        "block_size": BLOCK_SIZE,
+        "block_mask": BLOCK_MASK,
+        "sentinel_valid": SENTINEL_VALID,
+        "sentinel_disallowed": SENTINEL_DISALLOWED,
+        "ignored_idx": IGNORED_IDX,
+        "bool_flag": BOOL_FLAG,
+        "low_range_end": low_range_end,
+        "high_ignored_start": high_ignored_start,
+        "high_ignored_end": high_ignored_end,
+        "stage1": stage1,
+        "mixed_data": mixed_data,
+        "bool_words": bool_words,
+        "utf8_table": list(utf8_table),
+    }
+
+
+def print_idna():
+    """Print expanded C++ arrays to stdout (debug / legacy)."""
+    data = generate_idna()
+    version = data["version"]
+    stage1 = data["stage1"]
+    mixed_data = data["mixed_data"]
+    bool_words = data["bool_words"]
+    utf8_table = data["utf8_table"]
+    n_stage1 = len(stage1)
+    n_mixed = len(mixed_data)
+    n_bool = len(bool_words)
+    n_utf8 = len(utf8_table)
+    total_bytes = (n_stage1 * 2) + (n_mixed * 2) + (n_bool * 8) + n_utf8
+    low_range_end = data["low_range_end"]
+    high_ignored_start = data["high_ignored_start"]
+    high_ignored_end = data["high_ignored_end"]
 
     print(f"// IDNA {version}")
     print(f"// Two-level compressed mapping table.")
@@ -354,5 +387,48 @@ def print_idna():
     print("} // namespace ada::idna")
     print("#endif // ADA_IDNA_MAPPING_TABLE_H")
 
+
+def write_idna():
+    """Write constants to src/mapping_tables.cpp and update table_blob.inc."""
+    # Allow `python3 scripts/idna_table.py --write` from any cwd.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    import pack_tables
+
+    data = generate_idna()
+    pack_tables.write_mapping_constants(
+        version=data["version"],
+        block_bits=data["block_bits"],
+        block_size=data["block_size"],
+        block_mask=data["block_mask"],
+        sentinel_valid=data["sentinel_valid"],
+        sentinel_disallowed=data["sentinel_disallowed"],
+        ignored_idx=data["ignored_idx"],
+        bool_flag=data["bool_flag"],
+        low_range_end=data["low_range_end"],
+        high_ignored_start=data["high_ignored_start"],
+        high_ignored_end=data["high_ignored_end"],
+        stage1=data["stage1"],
+        mixed_data=data["mixed_data"],
+        bool_words=data["bool_words"],
+        utf8_table=data["utf8_table"],
+    )
+    pack_tables.update_mapping_in_blob(
+        data["stage1"],
+        data["mixed_data"],
+        data["bool_words"],
+        data["utf8_table"],
+    )
+    print("Mapping tables regenerated and packed into table_blob.inc")
+
+
 if __name__ == "__main__":
-    print_idna()
+    if len(sys.argv) > 1 and sys.argv[1] in ("--write", "-w"):
+        write_idna()
+    elif len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print("Usage: python3 scripts/idna_table.py [--write]")
+        print("  (default)  Print expanded C++ mapping tables to stdout")
+        print("  --write    Write constants + update src/table_blob.inc")
+    else:
+        print_idna()

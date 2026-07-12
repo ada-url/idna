@@ -1,6 +1,9 @@
 #include "ada/idna/normalization.h"
 #include "normalization_tables.cpp"
 
+#include <algorithm>
+#include <cstdint>
+
 namespace ada::idna {
 
 // See
@@ -16,31 +19,46 @@ constexpr char32_t hangul_ncount = hangul_vcount * hangul_tcount;
 constexpr char32_t hangul_scount =
     hangul_lcount * hangul_vcount * hangul_tcount;
 
+// Binary search sparse decomposition table. Returns index or size_t(-1).
+static size_t find_decomposition(char32_t cp) noexcept {
+  size_t lo = 0;
+  size_t hi = decomposition_count;
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    if (decomposition_cp[mid] < cp) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  if (lo < decomposition_count && decomposition_cp[lo] == cp) {
+    return lo;
+  }
+  return static_cast<size_t>(-1);
+}
+
 std::pair<bool, size_t> compute_decomposition_length(
     const std::u32string_view input) noexcept {
   bool decomposition_needed{false};
   size_t additional_elements{0};
   for (char32_t current_character : input) {
-    size_t decomposition_length{0};
+    size_t decomp_len{0};
 
     if (current_character >= hangul_sbase &&
         current_character < hangul_sbase + hangul_scount) {
-      decomposition_length = 2;
+      decomp_len = 2;
       if ((current_character - hangul_sbase) % hangul_tcount) {
-        decomposition_length = 3;
+        decomp_len = 3;
       }
     } else if (current_character < 0x110000) {
-      const uint8_t di = decomposition_index[current_character >> 8];
-      const uint16_t* const decomposition =
-          decomposition_block[di] + (current_character % 256);
-      decomposition_length = (decomposition[1] >> 2) - (decomposition[0] >> 2);
-      if ((decomposition_length > 0) && (decomposition[0] & 1)) {
-        decomposition_length = 0;
+      size_t idx = find_decomposition(current_character);
+      if (idx != static_cast<size_t>(-1)) {
+        decomp_len = decomposition_length[idx];
       }
     }
-    if (decomposition_length != 0) {
+    if (decomp_len != 0) {
       decomposition_needed = true;
-      additional_elements += decomposition_length - 1;
+      additional_elements += decomp_len - 1;
     }
   }
   return {decomposition_needed, additional_elements};
@@ -62,20 +80,13 @@ void decompose(std::u32string& input, size_t additional_elements) {
           hangul_vbase + (s_index % hangul_ncount) / hangul_tcount;
       input[--descending_idx] = hangul_lbase + s_index / hangul_ncount;
     } else if (input[input_count] < 0x110000) {
-      // Check decomposition_data.
-      const uint16_t* decomposition =
-          decomposition_block[decomposition_index[input[input_count] >> 8]] +
-          (input[input_count] % 256);
-      uint16_t decomposition_length =
-          (decomposition[1] >> 2) - (decomposition[0] >> 2);
-      if (decomposition_length > 0 && (decomposition[0] & 1)) {
-        decomposition_length = 0;
-      }
-      if (decomposition_length > 0) {
-        // Non-recursive decomposition.
-        while (decomposition_length-- > 0) {
-          input[--descending_idx] = decomposition_data[(decomposition[0] >> 2) +
-                                                       decomposition_length];
+      size_t idx = find_decomposition(input[input_count]);
+      if (idx != static_cast<size_t>(-1)) {
+        uint8_t decomp_len = decomposition_length[idx];
+        uint16_t data_offset = decomposition_offset[idx];
+        while (decomp_len-- > 0) {
+          input[--descending_idx] =
+              decomposition_data_at(data_offset + decomp_len);
         }
       } else {
         // No decomposition.
@@ -89,9 +100,28 @@ void decompose(std::u32string& input, size_t additional_elements) {
 }
 
 uint8_t get_ccc(char32_t c) noexcept {
-  return c < 0x110000 ? canonical_combining_class_block
-                            [canonical_combining_class_index[c >> 8]][c % 256]
-                      : 0;
+  if (c >= 0x110000 || ccc_range_count == 0) {
+    return 0;
+  }
+  // Binary search for the last range with start <= c.
+  size_t lo = 0;
+  size_t hi = ccc_range_count;
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    if (ccc_range_start[mid] <= c) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  if (lo == 0) {
+    return 0;
+  }
+  size_t i = lo - 1;
+  if (c < ccc_range_start[i] + ccc_range_length[i]) {
+    return ccc_range_value[i];
+  }
+  return 0;
 }
 
 void sort_marks(std::u32string& input) {
@@ -158,9 +188,10 @@ void compose(std::u32string& input) {
         input[composition_count] += input[++input_count] - hangul_tbase;
       }
     } else if (input[input_count] < 0x110000) {
+      uint8_t bi = composition_block_for_page(
+          static_cast<uint32_t>(input[input_count]) >> 8);
       const uint16_t* composition =
-          &composition_block[composition_index[input[input_count] >> 8]]
-                            [input[input_count] % 256];
+          &composition_block[bi][input[input_count] % 256];
       size_t initial_composition_count = composition_count;
       for (int32_t previous_ccc = -1; input_count + 1 < input.size();
            input_count++) {
@@ -173,19 +204,23 @@ void compose(std::u32string& input) {
           while (left + 2 < right) {
             // mean without overflow
             int middle = left + (((right - left) >> 1) & ~1);
-            if (composition_data[middle] <= input[input_count + 1]) {
+            if (composition_data_at(static_cast<size_t>(middle)) <=
+                input[input_count + 1]) {
               left = middle;
             }
-            if (composition_data[middle] >= input[input_count + 1]) {
+            if (composition_data_at(static_cast<size_t>(middle)) >=
+                input[input_count + 1]) {
               right = middle;
             }
           }
-          if (composition_data[left] == input[input_count + 1]) {
-            input[initial_composition_count] = composition_data[left + 1];
-            composition =
-                &composition_block
-                    [composition_index[composition_data[left + 1] >> 8]]
-                    [composition_data[left + 1] % 256];
+          if (composition_data_at(static_cast<size_t>(left)) ==
+              input[input_count + 1]) {
+            input[initial_composition_count] =
+                composition_data_at(static_cast<size_t>(left + 1));
+            char32_t composed = input[initial_composition_count];
+            bi = composition_block_for_page(static_cast<uint32_t>(composed) >>
+                                            8);
+            composition = &composition_block[bi][composed % 256];
             continue;
           }
         }

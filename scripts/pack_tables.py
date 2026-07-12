@@ -164,6 +164,8 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
         layout.append((name, off, len(vals) * WIDTH[kind], kind, len(vals)))
 
     uncompressed = bytes(blob)
+    # CRC-32 (ISO HDLC / zlib) over the uncompressed payload for integrity checks.
+    uncompressed_crc32 = zlib.crc32(uncompressed) & 0xFFFFFFFF
     co = zlib.compressobj(9, zlib.DEFLATED, -15)
     compressed = co.compress(uncompressed) + co.flush()
     assert zlib.decompress(compressed, -15) == uncompressed
@@ -209,6 +211,7 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
         "namespace ada::idna::table_blob {",
         f"constexpr size_t uncompressed_size = {len(uncompressed)};",
         f"constexpr size_t compressed_size = {len(compressed)};",
+        f"constexpr uint32_t uncompressed_crc32 = 0x{uncompressed_crc32:08X}u;",
     ]
     for k, v in meta.items():
         out.append(f"constexpr size_t {k} = {v};")

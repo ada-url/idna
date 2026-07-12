@@ -41,3 +41,4 @@ singleheader/singleheader.zip
 
 .idea
 cmake-build-debug
+scripts/__pycache__/

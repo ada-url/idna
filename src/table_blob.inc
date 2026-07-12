@@ -8,6 +8,7 @@
 namespace ada::idna::table_blob {
 constexpr size_t uncompressed_size = 224608;
 constexpr size_t compressed_size = 62377;
+constexpr uint32_t uncompressed_crc32 = 0x6F4A6B2Eu;
 constexpr size_t decomposition_block_rows = 67;
 constexpr size_t decomposition_block_cols = 257;
 constexpr size_t ccc_block_rows = 67;

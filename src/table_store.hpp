@@ -113,6 +113,7 @@ inline const uint16_t* composition_block_flat = nullptr;
 inline const char32_t* composition_data = nullptr;
 
 // --- Identifier --------------------------------------------------------------
+// Pointer-to-array alias. CF17 vs CF22 disagree on spacing inside (*)[2].
 // clang-format off
 using range_pair_ptr = const uint32_t(*)[2];
 // clang-format on
@@ -154,10 +155,26 @@ inline constexpr uint8_t kTablesFailed = 3;
 
 inline std::atomic<uint8_t> tables_init_state{kTablesUninit};
 // Process-lifetime allocation published only by the winning init thread.
+// Never freed: shared read-only data for the process. Do not dlclose a DSO
+// that owns this buffer while other code may still call into ada::idna.
 inline uint8_t* tables_buffer = nullptr;
 
 // Cap spin-wait so a stuck peer cannot hang the process forever.
 inline constexpr uint64_t kTablesSpinLimit = 1'000'000'000ull;
+
+// ISO HDLC / zlib CRC-32 of the uncompressed table payload.
+[[nodiscard]] inline uint32_t crc32_ieee(const uint8_t* data,
+                                         size_t len) noexcept {
+  uint32_t c = 0xFFFFFFFFu;
+  for (size_t i = 0; i < len; ++i) {
+    c ^= data[i];
+    for (int k = 0; k < 8; ++k) {
+      const uint32_t mask = 0u - (c & 1u);
+      c = (c >> 1) ^ (0xEDB88320u & mask);
+    }
+  }
+  return ~c;
+}
 
 [[nodiscard]] inline bool tables_are_ready() noexcept {
   return tables_init_state.load(std::memory_order_acquire) == kTablesReady;
@@ -186,7 +203,8 @@ inline constexpr uint64_t kTablesSpinLimit = 1'000'000'000ull;
     const size_t n = deflate::inflate_raw(table_blob::compressed,
                                           table_blob::compressed_size, buffer,
                                           table_blob::uncompressed_size);
-    if (n != table_blob::uncompressed_size) {
+    if (n != table_blob::uncompressed_size ||
+        crc32_ieee(buffer, n) != table_blob::uncompressed_crc32) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;

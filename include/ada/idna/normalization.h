@@ -7,7 +7,9 @@
 namespace ada::idna {
 
 // Normalize the characters according to IDNA (Unicode Normalization Form C).
-void normalize(std::u32string& input);
+// Returns false if the internal Unicode tables could not be loaded; in that
+// case `input` is left unchanged.
+[[nodiscard]] bool normalize(std::u32string& input);
 
 }  // namespace ada::idna
 #endif

@@ -16,8 +16,12 @@
 #endif
 
 namespace ada::idna {
-std::string to_unicode(std::string_view input) {
-  std::string output;
+
+[[nodiscard]] bool to_unicode(std::string_view input, std::string& output) {
+  output.clear();
+  if (input.size() > max_domain_input_bytes) {
+    return false;
+  }
   output.reserve(input.size());
 
   size_t label_start = 0;
@@ -44,12 +48,10 @@ std::string to_unicode(std::string_view input) {
           post_map.clear();
           if (!ada::idna::map(tmp_buffer, post_map) || post_map != tmp_buffer) {
             accept_decoded = false;
-          } else {
-            ada::idna::normalize(post_map);
-            if (post_map != tmp_buffer || post_map.empty() ||
-                !ada::idna::is_label_valid(post_map)) {
-              accept_decoded = false;
-            }
+          } else if (!ada::idna::normalize(post_map) ||
+                     post_map != tmp_buffer || post_map.empty() ||
+                     !ada::idna::is_label_valid(post_map)) {
+            accept_decoded = false;
           }
         }
 
@@ -62,12 +64,6 @@ std::string to_unicode(std::string_view input) {
           size_t written = simdutf::convert_utf32_to_utf8(
               tmp_buffer.data(), tmp_buffer.size(), output.data() + old_size);
           if (written != utf8_size) {
-            // This cannot happen because punycode_to_utf32 only produces valid
-            // Unicode code points, but if it does (it would indicate a bug in
-            // punycode_to_utf32 or simdutf), we can fall back to the original
-            // input. This is pendantic. We have no report of such an issue and
-            // no reason to expect it, but we want to be robust against any such
-            // bug.
             output.resize(old_size);
             output.append(
                 std::string_view(input.data() + label_start, label_size));
@@ -77,8 +73,13 @@ std::string to_unicode(std::string_view input) {
                                                              tmp_buffer.size());
           size_t old_size = output.size();
           output.resize(old_size + utf8_size);
-          ada::idna::utf32_to_utf8(tmp_buffer.data(), tmp_buffer.size(),
-                                   output.data() + old_size);
+          size_t written = ada::idna::utf32_to_utf8(
+              tmp_buffer.data(), tmp_buffer.size(), output.data() + old_size);
+          if (written != utf8_size) {
+            output.resize(old_size);
+            output.append(
+                std::string_view(input.data() + label_start, label_size));
+          }
 #endif
         } else {
           // ToUnicode never fails. If any step fails, return the original
@@ -87,8 +88,6 @@ std::string to_unicode(std::string_view input) {
               std::string_view(input.data() + label_start, label_size));
         }
       } else {
-        // ToUnicode never fails.  If any step fails, then the original input
-        // sequence is returned immediately in that step.
         output.append(std::string_view(input.data() + label_start, label_size));
       }
     } else {
@@ -102,6 +101,16 @@ std::string to_unicode(std::string_view input) {
     label_start += label_size + 1;
   }
 
+  return true;
+}
+
+std::string to_unicode(std::string_view input) {
+  std::string output;
+  if (!to_unicode(input, output)) {
+    // Over-limit input: return original (ToUnicode never fails in the sense of
+    // producing no answer for valid-length inputs).
+    return std::string(input);
+  }
   return output;
 }
 }  // namespace ada::idna

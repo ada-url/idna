@@ -218,19 +218,19 @@ void compose(std::u32string& input) {
   }
 }
 
-void normalize(std::u32string& input) {
+bool normalize(std::u32string& input) {
   /**
-   * Normalize the domain_name string to Unicode Normalization Form C.
+   * Normalize the characters according to IDNA (Unicode Normalization Form C).
    * @see https://www.unicode.org/reports/tr46/#ProcessingStepNormalize
    */
   if (!ensure_tables() || decomposition_index == nullptr ||
       composition_index == nullptr) {
-    // Without tables we cannot produce NFC; leave input unchanged so callers
-    // that re-check NFC (e.g. to_unicode) will reject the label.
-    return;
+    // Without tables we cannot produce NFC; leave input unchanged.
+    return false;
   }
   decompose_nfc(input);
   compose(input);
+  return true;
 }
 
 }  // namespace ada::idna

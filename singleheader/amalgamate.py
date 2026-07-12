@@ -129,6 +129,11 @@ for h in ALLCHEADERS:
 amal_h.close()
 print()
 print()
+# The .cpp amalgamation is self-contained (demo includes it alone). Re-emit
+# headers when processing .cpp so constants/types from public headers are
+# visible; otherwise includes already pulled into ada_idna.h are skipped.
+found_includes = []
+found_unilib = []
 print(f"Creating {AMAL_C}")
 amal_c = open(AMAL_C, 'w')
 print(f"/* auto-generated on {timestamp}. Do not edit! */", file=amal_c)

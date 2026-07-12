@@ -64,56 +64,58 @@ bool contains_forbidden_domain_code_point(std::string_view view) {
 // yet still fail IDNA validity criteria (ContextJ/Bidi rules, code points with
 // "mapped" status, empty labels, ...) and must nevertheless be accepted as-is.
 //
-// See https://url.spec.whatwg.org/#concept-domain-to-ascii:
-//   "When beStrict is false and domain is an ASCII string, the algorithm
-//    returns domain lowercased regardless of Unicode ToASCII's outcome, due to
-//    web compatibility. [...] Punycode can decode successfully yet still fail
-//    validity criteria. E.g., xn--8i7caa decodes to fullwidth 'www'
-//    (U+FF57 x3), whose code points have status 'mapped'."
-//
-// The forbidden-domain-code-point and empty-host checks are the caller's
-// responsibility (the URL host parser performs them on the result), so they
-// are intentionally not duplicated here.
+// See https://url.spec.whatwg.org/#concept-domain-to-ascii
 static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   std::string out(ut8_string);
   ascii_map(out.data(), out.size());
   return out;
 }
 
-// We return "" on error.
-std::string to_ascii(std::string_view ut8_string) {
-  if (is_ascii(ut8_string)) {
-    return from_ascii_to_ascii(ut8_string);
+[[nodiscard]] bool to_ascii(std::string_view ut8_string, std::string& out) {
+  out.clear();
+  if (ut8_string.size() > max_domain_input_bytes) {
+    return false;
   }
-  static const std::string error = "";
-  // We convert to UTF-32
+  if (is_ascii(ut8_string)) {
+    out = from_ascii_to_ascii(ut8_string);
+    return true;
+  }
 
 #ifdef ADA_USE_SIMDUTF
   size_t utf32_length =
       simdutf::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
+  if (utf32_length == 0 && !ut8_string.empty()) {
+    return false;
+  }
   std::u32string utf32(utf32_length, '\0');
   size_t actual_utf32_length = simdutf::convert_utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
 #else
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
+  if (utf32_length == 0 && !ut8_string.empty()) {
+    return false;
+  }
   std::u32string utf32(utf32_length, '\0');
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(
       ut8_string.data(), ut8_string.size(), utf32.data());
 #endif
-  if (actual_utf32_length == 0) {
-    return error;
+  // Require a complete conversion: reject invalid UTF-8 (actual < expected)
+  // and the empty conversion of non-empty input.
+  if (actual_utf32_length == 0 || actual_utf32_length != utf32_length) {
+    return false;
   }
-  // mapping: use the two-argument overload to avoid an extra heap allocation
-  // that the single-argument overload (which returns by value) would incur.
+  utf32.resize(actual_utf32_length);
+
   std::u32string tmp_buffer;
   std::u32string post_map;
   if (!ada::idna::map(utf32, tmp_buffer)) {
-    return error;
+    return false;
   }
   utf32 = std::move(tmp_buffer);
-  normalize(utf32);
-  std::string out;
+  if (!normalize(utf32)) {
+    return false;
+  }
   out.reserve(ut8_string.size());
   size_t label_start = 0;
 
@@ -128,12 +130,10 @@ std::string to_ascii(std::string_view ut8_string) {
     if (label_size == 0) {
       // empty label? Nothing to do.
     } else if (label_view.starts_with(U"xn--")) {
-      // we do not need to check, e.g., Xn-- because mapping goes to lower case
-      // Validate first, then bulk-copy with a single resize to avoid per-char
-      // capacity checks in operator+=.
       for (char32_t c : label_view) {
         if (c >= 0x80) {
-          return error;
+          out.clear();
+          return false;
         }
       }
       size_t label_out_start = out.size();
@@ -147,34 +147,39 @@ std::string to_ascii(std::string_view ut8_string) {
       tmp_buffer.clear();
       bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, tmp_buffer);
       if (!is_ok) {
-        return error;
+        out.clear();
+        return false;
       }
-      // If the input is just ASCII, it should not have been encoded
-      // as punycode.
-      // https://github.com/whatwg/url/issues/760
       if (is_ascii(tmp_buffer)) {
-        return error;
+        out.clear();
+        return false;
       }
       if (!ada::idna::map(tmp_buffer, post_map)) {
-        return error;
+        out.clear();
+        return false;
       }
       if (tmp_buffer != post_map) {
-        return error;
+        out.clear();
+        return false;
       }
-      normalize(post_map);
+      if (!normalize(post_map)) {
+        out.clear();
+        return false;
+      }
       if (post_map != tmp_buffer) {
-        return error;
+        out.clear();
+        return false;
       }
       if (post_map.empty()) {
-        return error;
+        out.clear();
+        return false;
       }
       if (!is_label_valid(post_map)) {
-        return error;
+        out.clear();
+        return false;
       }
     } else {
-      // The fast path here is an ascii label.
       if (is_ascii(label_view)) {
-        // no validation needed; bulk-copy with single resize.
         size_t old_size = out.size();
         out.resize(old_size + label_size);
         char* dest = out.data() + old_size;
@@ -182,22 +187,29 @@ std::string to_ascii(std::string_view ut8_string) {
           *dest++ = static_cast<char>(c);
         }
       } else {
-        // slow path.
-        // first check validity.
         if (!is_label_valid(label_view)) {
-          return error;
+          out.clear();
+          return false;
         }
-        // It is valid! So now we must encode it as punycode...
         out.append("xn--");
         bool is_ok = ada::idna::utf32_to_punycode(label_view, out);
         if (!is_ok) {
-          return error;
+          out.clear();
+          return false;
         }
       }
     }
     if (!is_last_label) {
       out.push_back('.');
     }
+  }
+  return true;
+}
+
+std::string to_ascii(std::string_view ut8_string) {
+  std::string out;
+  if (!to_ascii(ut8_string, out)) {
+    return {};
   }
   return out;
 }

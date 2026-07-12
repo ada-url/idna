@@ -173,34 +173,36 @@ struct Huff {
   }
 };
 
-inline int fixed_litlen(BitReader& br) {
+// Fixed Huffman tables are built once at dynamic initialization (before main /
+// single-threaded), so concurrent first-use of inflate cannot race.
+inline Huff make_fixed_litlen_huff() {
+  Huff h;
+  uint8_t lens[288];
   // Fixed Huffman: 0-143:8, 144-255:9, 256-279:7, 280-287:8
-  // Build on first use
-  static Huff h;
-  static bool ready = false;
-  if (!ready) {
-    uint8_t lens[288];
-    for (int i = 0; i <= 143; i++) lens[i] = 8;
-    for (int i = 144; i <= 255; i++) lens[i] = 9;
-    for (int i = 256; i <= 279; i++) lens[i] = 7;
-    for (int i = 280; i <= 287; i++) lens[i] = 8;
-    h.build2(lens, 288);
-    ready = true;
-  }
-  return h.decode(br);
+  for (int i = 0; i <= 143; i++) lens[i] = 8;
+  for (int i = 144; i <= 255; i++) lens[i] = 9;
+  for (int i = 256; i <= 279; i++) lens[i] = 7;
+  for (int i = 280; i <= 287; i++) lens[i] = 8;
+  h.build2(lens, 288);
+  return h;
 }
 
-inline int fixed_dist(BitReader& br) {
-  static Huff h;
-  static bool ready = false;
-  if (!ready) {
-    uint8_t lens[32];
-    for (int i = 0; i < 32; i++) lens[i] = 5;
-    h.build2(lens, 32);
-    ready = true;
-  }
-  return h.decode(br);
+inline Huff make_fixed_dist_huff() {
+  Huff h;
+  uint8_t lens[32];
+  for (int i = 0; i < 32; i++) lens[i] = 5;
+  h.build2(lens, 32);
+  return h;
 }
+
+// NOLINTNEXTLINE(cert-err58-cpp) -- intentional process-lifetime tables
+inline const Huff kFixedLitLenHuff = make_fixed_litlen_huff();
+// NOLINTNEXTLINE(cert-err58-cpp)
+inline const Huff kFixedDistHuff = make_fixed_dist_huff();
+
+inline int fixed_litlen(BitReader& br) { return kFixedLitLenHuff.decode(br); }
+
+inline int fixed_dist(BitReader& br) { return kFixedDistHuff.decode(br); }
 
 // length and distance base tables
 static const uint16_t len_base[29] = {

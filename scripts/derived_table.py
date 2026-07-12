@@ -133,11 +133,25 @@ def parse_id_continue_section(text):
     
     return result
 
-def print_derived():
+def generate_derived():
+    """Build identifier range tables from DerivedCoreProperties.txt."""
     table_data = get_derived_table()
-    print("// IDNA ", get_version(get_derived_table()))
+    version = get_version(table_data)
     id_start = parse_id_start_section(table_data)
     id_continue = parse_id_continue_section(table_data)
+    return {
+        "version": version,
+        "id_start": id_start,
+        "id_continue": id_continue,
+    }
+
+
+def print_derived():
+    """Print expanded C++ identifier tables to stdout (debug / legacy)."""
+    data = generate_derived()
+    print("// IDNA ", data["version"])
+    id_start = data["id_start"]
+    id_continue = data["id_continue"]
     print("""
 // clang-format off
 #ifndef ADA_IDNA_IDENTIFIER_TABLES_H
@@ -155,5 +169,31 @@ namespace ada::idna {
 } // namespace ada::idna
 #endif // ADA_IDNA_IDENTIFIER_TABLES_H
 """)
+
+
+def write_derived():
+    """Write id_tables stub and update table_blob.inc with new ranges."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    import pack_tables
+
+    data = generate_derived()
+    pack_tables.write_id_tables_stub(
+        version=data["version"],
+        id_continue=data["id_continue"],
+        id_start=data["id_start"],
+    )
+    pack_tables.update_id_in_blob(data["id_continue"], data["id_start"])
+    print("Identifier tables regenerated and packed into table_blob.inc")
+
+
 if __name__ == "__main__":
-    print_derived()
+    if len(sys.argv) > 1 and sys.argv[1] in ("--write", "-w"):
+        write_derived()
+    elif len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print("Usage: python3 scripts/derived_table.py [--write]")
+        print("  (default)  Print expanded C++ identifier tables to stdout")
+        print("  --write    Write stub + update src/table_blob.inc")
+    else:
+        print_derived()

@@ -60,8 +60,10 @@ inline const uint16_t* composition_block_flat = nullptr;
 inline const char32_t* composition_data = nullptr;
 
 // --- Identifier --------------------------------------------------------------
-// Pointer-to-array alias (stable under clang-format 17 vs newer).
-using range_pair_ptr = const uint32_t (*)[2];
+// Pointer-to-array alias. CF17 vs CF22 disagree on spacing inside (*)[2].
+// clang-format off
+using range_pair_ptr = const uint32_t(*)[2];
+// clang-format on
 inline range_pair_ptr id_continue = nullptr;
 inline range_pair_ptr id_start = nullptr;
 

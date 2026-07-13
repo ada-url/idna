@@ -54,3 +54,27 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --output-on-failure --test-dir build
+
+  # Big-endian via QEMU. Catches LE-only table_blob host conversion bugs
+  # (pack_tables.py writes little-endian; s390x must bswap after inflate).
+  s390x:
+    if: >-
+      ! contains(toJSON(github.event.commits.*.message), '[skip ci]') &&
+      ! contains(toJSON(github.event.commits.*.message), '[skip github]')
+    name: s390x
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@f9b26e3a1a408d5fd530d20c17b9f3f4428ff8d9 # v3.1.0
+        name: Build and Test
+        with:
+          arch: s390x
+          distro: ubuntu_latest
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -q -y
+            apt-get install -y cmake make g++-12 gcc-12 git ninja-build
+          run: |
+            CC=gcc-12 CXX=g++-12 cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -B build
+            CC=gcc-12 CXX=g++-12 cmake --build build -j=4
+            ctest --output-on-failure --test-dir build

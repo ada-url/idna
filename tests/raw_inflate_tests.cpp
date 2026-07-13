@@ -12,6 +12,7 @@
 #include "idna.h"
 #include "../src/raw_inflate.hpp"
 #include "../src/table_store.hpp"
+// detail::bswap_inplace is exercised for BE host conversion regression.
 
 namespace {
 
@@ -65,4 +66,36 @@ TEST(RawInflate, TableBlobInflatesViaEnsureTables) {
       "agefactory.ca");
   ASSERT_FALSE(ascii.empty());
   EXPECT_EQ(ascii, "xn--meagefactory-m9a.ca");
+}
+
+// Regression: table_blob is little-endian. On big-endian hosts (s390x) we must
+// bswap multi-byte sections after inflate or IDNA lookups fail.
+TEST(RawInflate, LittleEndianWordsConvertToHost) {
+  // LE memory image of 0x1234 and 0xABCD.
+  uint8_t le_bytes[4] = {0x34, 0x12, 0xCD, 0xAB};
+  uint16_t words[2];
+  std::memcpy(words, le_bytes, sizeof(words));
+  ada::idna::detail::bswap_inplace(words, 2);
+  EXPECT_EQ(words[0], 0x1234);
+  EXPECT_EQ(words[1], 0xABCD);
+
+  uint8_t le32[4] = {0x78, 0x56, 0x34, 0x12};
+  uint32_t w32;
+  std::memcpy(&w32, le32, 4);
+  ada::idna::detail::bswap_inplace(&w32, 1);
+  EXPECT_EQ(w32, 0x12345678u);
+}
+
+TEST(RawInflate, HostEndianTablesServeUnicodeIdna) {
+  // Multi-byte table-backed mapping / normalization / identifier ranges.
+  // (UTS #46 non-transitional: U+00DF is not mapped to "ss" alone as a label.)
+  EXPECT_EQ(ada::idna::to_ascii("\xc3\x9f.com"), "xn--zca.com");
+  EXPECT_EQ(ada::idna::to_ascii("m\xc3\xbc"
+                                "nchen.de"),
+            "xn--mnchen-3ya.de");
+  EXPECT_EQ(ada::idna::to_ascii("me\xc3\x9f"
+                                "agefactory.ca"),
+            "xn--meagefactory-m9a.ca");
+  EXPECT_TRUE(ada::idna::valid_name_code_point(U'a', true));
+  EXPECT_TRUE(ada::idna::valid_name_code_point(U'\u03b1', true));  // alpha
 }

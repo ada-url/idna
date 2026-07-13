@@ -60,8 +60,9 @@ TEST(RawInflate, TableBlobInflatesViaEnsureTables) {
   ASSERT_TRUE(ada::idna::ensure_tables());
   EXPECT_TRUE(ada::idna::tables_are_ready());
   // Non-ASCII path exercises mapping tables produced by inflate.
-  std::string ascii = ada::idna::to_ascii("me\xc3\x9f"
-                                          "agefactory.ca");
+  std::string ascii = ada::idna::to_ascii(
+      "me\xc3\x9f"
+      "agefactory.ca");
   ASSERT_FALSE(ascii.empty());
   EXPECT_EQ(ascii, "xn--meagefactory-m9a.ca");
 }

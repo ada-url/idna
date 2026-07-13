@@ -23,6 +23,7 @@ else()
   add_executable(to_unicode_tests to_unicode_tests.cpp)
   add_executable(wpt_tests wpt_tests.cpp)
   add_executable(safety_tests safety_tests.cpp)
+  add_executable(raw_inflate_tests raw_inflate_tests.cpp)
 
   target_link_libraries(identifier_tests PRIVATE simdjson GTest::gtest_main)
   target_link_libraries(mapping_tests PRIVATE simdjson GTest::gtest_main)
@@ -31,6 +32,22 @@ else()
   target_link_libraries(to_unicode_tests PRIVATE simdjson GTest::gtest_main)
   target_link_libraries(wpt_tests PRIVATE simdjson GTest::gtest_main)
   target_link_libraries(safety_tests PRIVATE GTest::gtest_main)
+  target_link_libraries(raw_inflate_tests PRIVATE GTest::gtest_main)
+
+  # Match ada's pedantic g++-12 job so unused-but-set and similar warnings
+  # fail the build (regression for raw_inflate.hpp Huff::build fill[]).
+  set(ADA_IDNA_PEDANTIC_FLAGS
+      -Werror
+      -Wextra
+      -Wno-unused-parameter
+      -Wimplicit-fallthrough
+  )
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(raw_inflate_tests PRIVATE ${ADA_IDNA_PEDANTIC_FLAGS})
+    # Ensure the library TU that includes raw_inflate.hpp is also pedantic
+    # when these tests are linked (shared object already compiled; re-apply
+    # on the test TU which includes the header directly).
+  endif()
 
   gtest_discover_tests(identifier_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
   gtest_discover_tests(mapping_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
@@ -39,6 +56,7 @@ else()
   gtest_discover_tests(to_unicode_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
   gtest_discover_tests(wpt_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
   gtest_discover_tests(safety_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
+  gtest_discover_tests(raw_inflate_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
@@ -59,6 +77,7 @@ else()
     target_compile_definitions(to_unicode_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(wpt_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(safety_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(raw_inflate_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
   endif()
 
 endif()

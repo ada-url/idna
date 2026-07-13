@@ -90,3 +90,14 @@ TEST(Safety, TablesReadyAfterUse) {
                    .empty());
   EXPECT_TRUE(ada::idna::tables_are_ready());
 }
+
+TEST(Safety, IsAlreadyNfc) {
+  ASSERT_TRUE(ada::idna::ensure_tables());
+  std::u32string ascii = U"example.com";
+  EXPECT_TRUE(ada::idna::is_already_nfc(ascii));
+  // Precomposed e-acute is NFC; e + combining acute is not.
+  std::u32string precomposed = {0xE9};
+  std::u32string decomposed = {0x65, 0x301};
+  EXPECT_TRUE(ada::idna::is_already_nfc(precomposed));
+  EXPECT_FALSE(ada::idna::is_already_nfc(decomposed));
+}

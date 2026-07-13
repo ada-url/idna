@@ -31,6 +31,9 @@ else(MSVC)
   target_compile_options(ada-idna PRIVATE -Wall -Wextra -Weffc++)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ada-idna PRIVATE -Wsuggest-override)
+    # Catch dead locals such as the former Huff::build fill[] array that
+    # failed ada's pedantic g++-12 job (-Werror=unused-but-set-variable).
+    target_compile_options(ada-idna PRIVATE -Werror=unused-but-set-variable)
   endif()
   if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
     target_compile_options(ada-idna PRIVATE -Winconsistent-missing-override)

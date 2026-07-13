@@ -29,3 +29,28 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --output-on-failure  --test-dir build
+
+  # Same warning set as ada-url/ada pedantic (g++-12) so raw_inflate.hpp and
+  # other headers that get amalgamated into ada cannot introduce -Werror
+  # regressions such as unused-but-set-variable on Huff::build.
+  pedantic:
+    if: >-
+      ! contains(toJSON(github.event.commits.*.message), '[skip ci]') &&
+      ! contains(toJSON(github.event.commits.*.message), '[skip github]')
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        shared: [ON, OFF]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Prepare (pedantic g++-12)
+        run: >
+          cmake -DBUILD_SHARED_LIBS=${{matrix.shared}}
+          -DCMAKE_CXX_FLAGS="-Werror -Wextra -Wno-unused-parameter -Wimplicit-fallthrough"
+          -B build
+        env:
+          CXX: g++-12
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --output-on-failure --test-dir build

@@ -142,6 +142,16 @@ for c in ALLCFILES:
 
 amal_c.close()
 
+# Normalize formatting of amalgamated outputs (skipped re-includes leave blanks).
+for amal in (AMAL_H, AMAL_C):
+    try:
+        r = subprocess.run(['clang-format', '-i', amal], check=False,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            print(f"clang-format skipped for {amal}: {r.stderr.decode().strip()}")
+    except FileNotFoundError:
+        print("clang-format not found; leaving amalgamated files unformatted")
+
 # copy the README and DEMOCPP
 if SCRIPTPATH != AMALGAMATE_OUTPUT_PATH:
   shutil.copy2(os.path.join(SCRIPTPATH,"demo.cpp"),AMALGAMATE_OUTPUT_PATH)

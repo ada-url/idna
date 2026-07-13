@@ -1,0 +1,136 @@
+# On each published idna release, generate the amalgamation and open a PR
+# against ada-url/ada that updates the vendored ada_idna sources.
+#
+# Requires a repository secret GH_PAT with permission to push a branch and
+# open pull requests on ada-url/ada (contents:write, pull-requests:write).
+# The default GITHUB_TOKEN cannot write to a different repository.
+name: Sync amalgamation to ada
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "idna release tag to amalgamate (empty = latest release)"
+        required: false
+        type: string
+
+concurrency:
+  group: sync-to-ada-${{ github.event.release.tag_name || inputs.tag || 'latest' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  open-ada-pr:
+    name: Open PR on ada-url/ada
+    runs-on: ubuntu-latest
+    # Fail early with a clear message if the cross-repo token is missing.
+    steps:
+      - name: Check GH_PAT secret
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_PAT" ]; then
+            echo "::error::Repository secret GH_PAT is not set. It must be a token that can push branches and open PRs on ada-url/ada."
+            exit 1
+          fi
+
+      - name: Resolve idna tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="$RELEASE_TAG"
+          elif [ -n "${INPUT_TAG:-}" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::Could not resolve an idna release tag"
+            exit 1
+          fi
+          # Branch-safe suffix (v0.6.0 -> v0.6.0)
+          SAFE=$(echo "$TAG" | tr -c 'A-Za-z0-9._-' '-')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "branch=bot/update-idna-${SAFE}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: $TAG"
+
+      - name: Checkout idna at release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          path: idna
+
+      - name: Generate amalgamation
+        working-directory: idna
+        run: |
+          python3 singleheader/amalgamate.py
+          test -f singleheader/ada_idna.h
+          test -f singleheader/ada_idna.cpp
+          # Optional: match ada clang-format if available (amalgamate also tries).
+          if command -v clang-format >/dev/null 2>&1; then
+            clang-format -i singleheader/ada_idna.h singleheader/ada_idna.cpp || true
+          fi
+          wc -c singleheader/ada_idna.h singleheader/ada_idna.cpp
+
+      - name: Checkout ada-url/ada
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ada-url/ada
+          token: ${{ secrets.GH_PAT }}
+          path: ada
+          # create-pull-request needs enough history for a clean base.
+          fetch-depth: 0
+
+      - name: Replace vendored ada_idna sources
+        run: |
+          set -euo pipefail
+          cp idna/singleheader/ada_idna.h ada/include/ada/ada_idna.h
+          cp idna/singleheader/ada_idna.cpp ada/src/ada_idna.cpp
+          # Fail if nothing changed (already up to date).
+          if git -C ada diff --quiet -- include/ada/ada_idna.h src/ada_idna.cpp; then
+            echo "ada already has the amalgamated sources from ${{ steps.meta.outputs.tag }}; no PR needed."
+            echo "noop=true" >> "$GITHUB_ENV"
+          else
+            echo "noop=false" >> "$GITHUB_ENV"
+            git -C ada diff --stat
+          fi
+
+      - name: Create pull request on ada
+        if: env.noop != 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          path: ada
+          token: ${{ secrets.GH_PAT }}
+          commit-message: "update ada-idna to ${{ steps.meta.outputs.tag }}"
+          branch: ${{ steps.meta.outputs.branch }}
+          title: "update ada-idna to ${{ steps.meta.outputs.tag }}"
+          body: |
+            ## Summary
+
+            Automated sync from [ada-url/idna ${{ steps.meta.outputs.tag }}](https://github.com/ada-url/idna/releases/tag/${{ steps.meta.outputs.tag }}).
+
+            Replaces the vendored amalgamation:
+
+            - `include/ada/ada_idna.h`
+            - `src/ada_idna.cpp`
+
+            Generated with `python3 singleheader/amalgamate.py` at the release tag.
+
+            Triggered by: `${{ github.event_name }}` on [ada-url/idna](https://github.com/ada-url/idna) ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})).
+
+            ## Test plan
+
+            - [ ] CI green on this PR
+            - [ ] Spot-check IDNA / WPT host tests if the release notes mention behavioral changes
+          delete-branch: true
+          sign-commits: false

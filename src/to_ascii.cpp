@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <ranges>
 
 #include "ada/idna/mapping.h"
@@ -59,16 +60,28 @@ bool contains_forbidden_domain_code_point(std::string_view view) {
 
 // Per the WHATWG URL "domain to ASCII" algorithm, when beStrict is false and
 // the input domain is an ASCII string, the result is the input lowercased,
-// regardless of the outcome of Unicode ToASCII. This is a deliberate
-// web-compatibility carve-out: a label may decode from its ACE ("xn--") form
-// yet still fail IDNA validity criteria (ContextJ/Bidi rules, code points with
-// "mapped" status, empty labels, ...) and must nevertheless be accepted as-is.
+// regardless of the outcome of Unicode ToASCII.
 //
 // See https://url.spec.whatwg.org/#concept-domain-to-ascii
-static std::string from_ascii_to_ascii(std::string_view ut8_string) {
-  std::string out(ut8_string);
+static void from_ascii_to_ascii(std::string_view ut8_string, std::string& out) {
+  out.assign(ut8_string);
   ascii_map(out.data(), out.size());
-  return out;
+}
+
+// Append ASCII code units from a UTF-32 label (all values < 0x80).
+static void append_ascii_label(std::string& out, std::u32string_view label) {
+  const size_t old = out.size();
+  out.resize(old + label.size());
+  char* dest = out.data() + old;
+  for (char32_t c : label) {
+    *dest++ = static_cast<char>(c);
+  }
+}
+
+// True if label begins with "xn--" (already lowercased by mapping).
+static bool is_ace_prefix(std::u32string_view label) noexcept {
+  return label.size() >= 4 && label[0] == U'x' && label[1] == U'n' &&
+         label[2] == U'-' && label[3] == U'-';
 }
 
 [[nodiscard]] bool to_ascii(std::string_view ut8_string, std::string& out) {
@@ -77,7 +90,7 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
     return false;
   }
   if (is_ascii(ut8_string)) {
-    out = from_ascii_to_ascii(ut8_string);
+    from_ascii_to_ascii(ut8_string, out);
     return true;
   }
 
@@ -87,119 +100,106 @@ static std::string from_ascii_to_ascii(std::string_view ut8_string) {
   if (utf32_length == 0 && !ut8_string.empty()) {
     return false;
   }
-  std::u32string utf32(utf32_length, '\0');
+  std::u32string working(utf32_length, U'\0');
   size_t actual_utf32_length = simdutf::convert_utf8_to_utf32(
-      ut8_string.data(), ut8_string.size(), utf32.data());
+      ut8_string.data(), ut8_string.size(), working.data());
 #else
   size_t utf32_length =
       ada::idna::utf32_length_from_utf8(ut8_string.data(), ut8_string.size());
   if (utf32_length == 0 && !ut8_string.empty()) {
     return false;
   }
-  std::u32string utf32(utf32_length, '\0');
+  std::u32string working(utf32_length, U'\0');
   size_t actual_utf32_length = ada::idna::utf8_to_utf32(
-      ut8_string.data(), ut8_string.size(), utf32.data());
+      ut8_string.data(), ut8_string.size(), working.data());
 #endif
-  // Require a complete conversion: reject invalid UTF-8 (actual < expected)
-  // and the empty conversion of non-empty input.
   if (actual_utf32_length == 0 || actual_utf32_length != utf32_length) {
     return false;
   }
-  utf32.resize(actual_utf32_length);
+  working.resize(actual_utf32_length);
 
+  // Map into a second buffer with exact sizing (no growth reallocs).
   std::u32string mapped;
-  std::u32string scratch;
-  std::u32string post_map;
-  if (!ada::idna::map(utf32, mapped)) {
+  if (!ada::idna::map(working, mapped)) {
     return false;
   }
-  // ASCII is already NFC; skip the (expensive) normalize pass when mapping
-  // produced only ASCII (common: e.g. U+00DF LATIN SMALL LETTER SHARP S ->
-  // "ss").
-  if (!is_ascii(mapped)) {
+  // Drop UTF-32 input; reuse `working` as scratch for ACE validation below.
+  working.clear();
+
+  // Skip NFC when already normalized (ASCII is a fast subset of this check).
+  if (!is_ascii(mapped) && !is_already_nfc(mapped)) {
     if (!normalize(mapped)) {
       return false;
     }
   }
-  out.reserve(ut8_string.size());
-  size_t label_start = 0;
 
-  while (label_start != mapped.size()) {
-    size_t loc_dot = mapped.find('.', label_start);
-    bool is_last_label = (loc_dot == std::string_view::npos);
-    size_t label_size =
-        is_last_label ? mapped.size() - label_start : loc_dot - label_start;
-    size_t label_size_with_dot = is_last_label ? label_size : label_size + 1;
-    std::u32string_view label_view(mapped.data() + label_start, label_size);
-    label_start += label_size_with_dot;
+  // Estimate ASCII output size (punycode may expand non-ASCII labels).
+  out.reserve(mapped.size() + 8);
+
+  // Walk labels with a single pointer scan (no repeated string::find).
+  const char32_t* p = mapped.data();
+  const char32_t* const end = p + mapped.size();
+  std::u32string post_map;
+
+  while (p < end) {
+    const char32_t* label_begin = p;
+    while (p < end && *p != U'.') {
+      ++p;
+    }
+    const size_t label_size = static_cast<size_t>(p - label_begin);
+    std::u32string_view label_view(label_begin, label_size);
+    const bool is_last_label = (p == end);
+    if (p < end) {
+      ++p;  // skip dot
+    }
+
     if (label_size == 0) {
-      // empty label? Nothing to do.
-    } else if (label_view.starts_with(U"xn--")) {
+      // empty label
+    } else if (is_ace_prefix(label_view)) {
       for (char32_t c : label_view) {
         if (c >= 0x80) {
           out.clear();
           return false;
         }
       }
-      size_t label_out_start = out.size();
-      out.resize(label_out_start + label_size);
-      char* dest = out.data() + label_out_start;
-      for (char32_t c : label_view) {
-        *dest++ = static_cast<char>(c);
-      }
-      std::string_view puny_segment_ascii(out.data() + label_out_start + 4,
-                                          label_size - 4);
-      scratch.clear();
-      bool is_ok = ada::idna::punycode_to_utf32(puny_segment_ascii, scratch);
-      if (!is_ok) {
+      append_ascii_label(out, label_view);
+      std::string_view puny_segment_ascii(
+          out.data() + (out.size() - label_size) + 4, label_size - 4);
+      working.clear();
+      if (!ada::idna::punycode_to_utf32(puny_segment_ascii, working)) {
         out.clear();
         return false;
       }
-      if (is_ascii(scratch)) {
+      if (is_ascii(working)) {
         out.clear();
         return false;
       }
-      if (!ada::idna::map(scratch, post_map)) {
+      if (!ada::idna::map(working, post_map) || working != post_map) {
         out.clear();
         return false;
       }
-      if (scratch != post_map) {
-        out.clear();
-        return false;
-      }
-      if (!is_ascii(post_map)) {
-        if (!normalize(post_map) || post_map != scratch) {
+      // Mapping must be stable; NFC must not change the mapped form either.
+      if (!is_ascii(post_map) && !is_already_nfc(post_map)) {
+        if (!normalize(post_map) || post_map != working) {
           out.clear();
           return false;
         }
       }
-      if (post_map.empty()) {
+      if (post_map.empty() || !is_label_valid(post_map)) {
         out.clear();
         return false;
       }
-      if (!is_label_valid(post_map)) {
-        out.clear();
-        return false;
-      }
+    } else if (is_ascii(label_view)) {
+      append_ascii_label(out, label_view);
     } else {
-      if (is_ascii(label_view)) {
-        size_t old_size = out.size();
-        out.resize(old_size + label_size);
-        char* dest = out.data() + old_size;
-        for (char32_t c : label_view) {
-          *dest++ = static_cast<char>(c);
-        }
-      } else {
-        if (!is_label_valid(label_view)) {
-          out.clear();
-          return false;
-        }
-        out.append("xn--");
-        bool is_ok = ada::idna::utf32_to_punycode(label_view, out);
-        if (!is_ok) {
-          out.clear();
-          return false;
-        }
+      if (!is_label_valid(label_view)) {
+        out.clear();
+        return false;
+      }
+      out.append("xn--");
+      if (!ada::idna::utf32_to_punycode(label_view, out)) {
+        out.clear();
+        return false;
       }
     }
     if (!is_last_label) {

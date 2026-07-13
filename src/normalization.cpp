@@ -19,6 +19,30 @@ constexpr char32_t hangul_ncount = hangul_vcount * hangul_tcount;
 constexpr char32_t hangul_scount =
     hangul_lcount * hangul_vcount * hangul_tcount;
 
+// Canonical decomposition length (0 if none / compatibility-only / Hangul
+// syllable). Length 1 means a singleton mapping (character is not NFC form).
+// Length >= 2 means a primary composite that is already the NFC form of its
+// decomposition (e.g. U+00E9 LATIN SMALL LETTER E WITH ACUTE).
+static size_t canonical_decomp_length(char32_t current_character) noexcept {
+  if (current_character >= hangul_sbase &&
+      current_character < hangul_sbase + hangul_scount) {
+    // Hangul precomposed syllables are NFC.
+    return 0;
+  }
+  if (current_character >= 0x110000) {
+    return 0;
+  }
+  const uint8_t di = decomposition_index[current_character >> 8];
+  const uint16_t* const decomposition =
+      decomposition_block_row(di) + (current_character % 256);
+  size_t decomposition_length =
+      (decomposition[1] >> 2) - (decomposition[0] >> 2);
+  if ((decomposition_length > 0) && (decomposition[0] & 1)) {
+    decomposition_length = 0;  // compatibility-only: ignored for NFC
+  }
+  return decomposition_length;
+}
+
 std::pair<bool, size_t> compute_decomposition_length(
     const std::u32string_view input) noexcept {
   bool decomposition_needed{false};
@@ -28,6 +52,7 @@ std::pair<bool, size_t> compute_decomposition_length(
 
     if (current_character >= hangul_sbase &&
         current_character < hangul_sbase + hangul_scount) {
+      // Full NFD-style Hangul decomp for the decompose() step.
       decomposition_length = 2;
       if ((current_character - hangul_sbase) % hangul_tcount) {
         decomposition_length = 3;
@@ -77,7 +102,6 @@ void decompose(std::u32string& input, size_t additional_elements) {
       if (decomposition_length > 0) {
         const size_t base = static_cast<size_t>(decomposition[0] >> 2);
         if (base + decomposition_length > decomposition_data_size) {
-          // Corrupt mapping offsets - keep original scalar.
           input[--descending_idx] = input[input_count];
         } else {
           while (decomposition_length-- > 0) {
@@ -130,6 +154,98 @@ void decompose_nfc(std::u32string& input) {
   sort_marks(input);
 }
 
+// Returns true if a composition step would change the string.
+static bool would_compose(std::u32string_view input) noexcept {
+  for (size_t input_count = 0; input_count < input.size();) {
+    const char32_t current = input[input_count];
+    if (current >= hangul_lbase && current < hangul_lbase + hangul_lcount) {
+      if (input_count + 1 < input.size() &&
+          input[input_count + 1] >= hangul_vbase &&
+          input[input_count + 1] < hangul_vbase + hangul_vcount) {
+        return true;
+      }
+      ++input_count;
+      continue;
+    }
+    if (current >= hangul_sbase && current < hangul_sbase + hangul_scount) {
+      if ((current - hangul_sbase) % hangul_tcount &&
+          input_count + 1 < input.size() &&
+          input[input_count + 1] > hangul_tbase &&
+          input[input_count + 1] < hangul_tbase + hangul_tcount) {
+        return true;
+      }
+      ++input_count;
+      continue;
+    }
+    if (current < 0x110000) {
+      const uint16_t* composition =
+          composition_block_row(composition_index[current >> 8]) +
+          (current % 256);
+      int32_t previous_ccc = -1;
+      size_t j = input_count;
+      for (; j + 1 < input.size(); ++j) {
+        uint8_t ccc = get_ccc(input[j + 1]);
+        if (composition[1] != composition[0] && previous_ccc < ccc) {
+          int left = composition[0];
+          int right = composition[1];
+          if (left < 0 || right < left ||
+              static_cast<size_t>(right) > composition_data_size) {
+            break;
+          }
+          while (left + 2 < right) {
+            int middle = left + (((right - left) >> 1) & ~1);
+            if (composition_data[static_cast<size_t>(middle)] <= input[j + 1]) {
+              left = middle;
+            }
+            if (composition_data[static_cast<size_t>(middle)] >= input[j + 1]) {
+              right = middle;
+            }
+          }
+          if (static_cast<size_t>(left + 1) < composition_data_size &&
+              composition_data[static_cast<size_t>(left)] == input[j + 1]) {
+            return true;
+          }
+        }
+        if (ccc == 0) {
+          break;
+        }
+        previous_ccc = ccc;
+      }
+      input_count = j + 1;
+      continue;
+    }
+    ++input_count;
+  }
+  return false;
+}
+
+bool is_already_nfc(std::u32string_view input) noexcept {
+  if (input.empty()) {
+    return true;
+  }
+  if (!tables_are_ready() && !ensure_tables()) {
+    return false;
+  }
+  // 1) Singleton decompositions are never NFC (e.g. U+212B ANGSTROM SIGN).
+  //    Multi-code-point decomps are primary composites that are NFC as-is.
+  for (char32_t c : input) {
+    if (canonical_decomp_length(c) == 1) {
+      return false;
+    }
+  }
+  // 2) Combining marks already in canonical order.
+  uint8_t prev_ccc = 0;
+  for (char32_t c : input) {
+    uint8_t ccc = get_ccc(c);
+    if (ccc != 0 && prev_ccc > ccc) {
+      return false;
+    }
+    prev_ccc = ccc;
+  }
+  // 3) No pairwise composition would apply (including Hangul L+V / LV+T).
+  return !would_compose(input);
+}
+
 void compose(std::u32string& input) {
   /**
    * Compose the domain_name string to Unicode Normalization Form C.
@@ -176,7 +292,6 @@ void compose(std::u32string& input) {
         if (composition[1] != composition[0] && previous_ccc < ccc) {
           int left = composition[0];
           int right = composition[1];
-          // Pair list is [combiner, result, ...]; reject corrupt ranges.
           if (left < 0 || right < left ||
               static_cast<size_t>(right) > composition_data_size) {
             break;
@@ -225,8 +340,10 @@ bool normalize(std::u32string& input) {
    */
   if (!ensure_tables() || decomposition_index == nullptr ||
       composition_index == nullptr) {
-    // Without tables we cannot produce NFC; leave input unchanged.
     return false;
+  }
+  if (is_already_nfc(input)) {
+    return true;
   }
   decompose_nfc(input);
   compose(input);

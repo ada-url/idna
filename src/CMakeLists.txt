@@ -5,18 +5,20 @@ add_library(ada-idna-include-source INTERFACE)
 target_include_directories(ada-idna-include-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 add_library(ada-idna-source INTERFACE)
 target_sources(ada-idna-source INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna.cpp
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna_hot.cpp
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna_aux.cpp
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/tables_init.cpp)
 target_link_libraries(ada-idna-source INTERFACE ada-include-source)
-add_library(ada-idna idna.cpp tables_init.cpp)
+# Split TUs: hot mapping/to_ascii at default -O3; aux + table init at -Os.
+add_library(ada-idna idna_hot.cpp idna_aux.cpp tables_init.cpp)
 target_compile_features(ada-idna PUBLIC cxx_std_20)
 target_include_directories(ada-idna PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> )
 target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
 
-# Cold init TU: table blob + inflater. Prefer size over speed so the large
-# payload and one-time inflate path do not inflate hot-path code size under -O3.
 if(NOT MSVC)
-  set_source_files_properties(tables_init.cpp PROPERTIES COMPILE_FLAGS "-Os")
+  set_source_files_properties(idna_aux.cpp tables_init.cpp PROPERTIES COMPILE_FLAGS "-Os")
+  # Drop exception/RTTI tables. Steady-state to_ascii stays within noise of -O3.
+  target_compile_options(ada-idna PRIVATE -fno-exceptions -fno-rtti)
 endif()
 
 if(ADA_USE_SIMDUTF)

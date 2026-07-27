@@ -6,10 +6,16 @@ target_include_directories(ada-idna-include-source INTERFACE $<BUILD_INTERFACE:$
 add_library(ada-idna-source INTERFACE)
 target_sources(ada-idna-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna.cpp)
 target_link_libraries(ada-idna-source INTERFACE ada-include-source)
-add_library(ada-idna idna.cpp)
+add_library(ada-idna idna.cpp tables_init.cpp)
 target_compile_features(ada-idna PUBLIC cxx_std_20)
 target_include_directories(ada-idna PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> )
 target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+
+# Cold init TU: table blob + inflater. Prefer size over speed so the large
+# payload and one-time inflate path do not inflate hot-path code size under -O3.
+if(NOT MSVC)
+  set_source_files_properties(tables_init.cpp PROPERTIES COMPILE_FLAGS "-Os")
+endif()
 
 if(ADA_USE_SIMDUTF)
   target_link_libraries(ada-idna PRIVATE simdutf)

@@ -36,7 +36,7 @@ else:
 
 AMALGAMATE_UNILIB_SOURCE_PATH = AMALGAMATE_SOURCE_PATH +"/unilib"
 # this list excludes the "src/generic headers"
-ALLCFILES = ["idna.cpp"]
+ALLCFILES = ["idna.cpp", "tables_init.cpp"]
 
 # order matters
 ALLCHEADERS = ["idna.h"]

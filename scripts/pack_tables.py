@@ -95,12 +95,12 @@ WIDTH = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
 #   v1 = per-section delta (u16/u32) + byte-plane split before raw DEFLATE
 #   v2 = dense run/sparse encoding; inflate then expand_dense() to multi-stage
 #
-# Default is v1 of the *IDNA-closure* multi-stage tables (built via dense_pack
-# expand at pack time). That is smaller on disk than full-Unicode multi-stage
-# and avoids a large runtime expander (v2).
+# v1: filter multi-stage then raw DEFLATE (~24.5 KiB). Best archive size with
+# system zlib + single-TU amalgamation (dense v2 expand code costs more than
+# the ~4.5 KiB blob savings).
 FILTER_VERSION = 1
-# When True with FILTER_VERSION==1, rewrite sections through dense build/expand
-# so NFC tables only cover the IDNA alphabet closure (much smaller blob).
+# When True, rewrite sections through dense build/expand so NFC tables only
+# cover the IDNA alphabet closure (much smaller multi-stage working set).
 USE_IDNA_CLOSURE_TABLES = True
 
 
@@ -474,6 +474,8 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
         f"constexpr size_t compressed_size = {len(compressed)};",
         f"constexpr uint32_t uncompressed_crc32 = 0x{uncompressed_crc32:08X}u;",
         f"constexpr uint32_t filter_version = {FILTER_VERSION}u;",
+        # Preprocessor mirror so cold TUs can omit dense expand code when unused.
+        f"#define ADA_IDNA_FILTER_VERSION {FILTER_VERSION}",
     ]
     for k, v in meta.items():
         meta_out.append(f"constexpr size_t {k} = {v};")

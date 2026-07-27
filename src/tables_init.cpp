@@ -1,19 +1,59 @@
 // Cold table init: inflate, unfilter/expand, CRC, publish pointers.
 // Compiled with -Os so the large blob and inflater do not bloat the hot -O3 TU.
 #include "table_store.hpp"
-#include "raw_inflate.hpp"
 #include "table_blob_data.inc"
+#if ADA_IDNA_FILTER_VERSION >= 2
+#include "dense_expand.hpp"
+#endif
+#if defined(ADA_IDNA_USE_SYSTEM_ZLIB) && ADA_IDNA_USE_SYSTEM_ZLIB
+#include <zlib.h>
+#else
+#include "raw_inflate.hpp"
+#endif
 
 #include <atomic>
 #include <cstdint>
 #include <new>
 
 namespace ada::idna {
+namespace {
+
+// Inflate raw DEFLATE (windowBits=-15) into dst. Returns bytes written, or 0.
+[[nodiscard]] size_t inflate_table_blob(const uint8_t* src, size_t src_len,
+                                        uint8_t* dst, size_t dst_cap) noexcept {
+#if defined(ADA_IDNA_USE_SYSTEM_ZLIB) && ADA_IDNA_USE_SYSTEM_ZLIB
+  z_stream stream{};
+  stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(src));
+  stream.avail_in = static_cast<uInt>(src_len);
+  stream.next_out = reinterpret_cast<Bytef*>(dst);
+  stream.avail_out = static_cast<uInt>(dst_cap);
+  if (inflateInit2(&stream, -15) != Z_OK) {
+    return 0;
+  }
+  const int rc = inflate(&stream, Z_FINISH);
+  const size_t out = static_cast<size_t>(stream.total_out);
+  inflateEnd(&stream);
+  if (rc != Z_STREAM_END) {
+    return 0;
+  }
+  return out;
+#else
+  return deflate::inflate_raw(src, src_len, dst, dst_cap);
+#endif
+}
+
+}  // namespace
+}  // namespace ada::idna
+
+namespace ada::idna {
 namespace detail {
+
+// (inflate_table_blob is in the anonymous namespace above.)
 
 [[nodiscard]] bool unfilter_table_blob(uint8_t* buffer) noexcept {
   // v0: nothing. v1: reverse delta + byte-plane. v2 uses expand_dense instead;
-  // unfilter remains available for the pure unit test that exercises LE decode.
+  // unfilter remains available for the pure unit test that exercises LE decode
+  // on synthetic filter-v1 payloads (filter_version may be 2 in production).
   if constexpr (table_blob::filter_version == 0) {
     (void)buffer;
     return true;
@@ -148,13 +188,35 @@ namespace {
       return false;
     }
 
-    // filter_version 0/1: inflate into the working multi-stage buffer, then
-    // reverse the pack-time prefilter (v1) or use the stream as-is (v0).
-    // (Dense filter_version 2 expand-at-init is available via dense_expand.hpp
-    // + pack_tables FILTER_VERSION=2, but the default pack path stays v1.)
-    const size_t n = deflate::inflate_raw(table_blob::compressed,
-                                          table_blob::compressed_size, buffer,
-                                          table_blob::uncompressed_size);
+#if ADA_IDNA_FILTER_VERSION >= 2
+    uint8_t* dense =
+        new (std::nothrow) uint8_t[table_blob::dense_uncompressed_size];
+    if (dense == nullptr) {
+      delete[] buffer;
+      tables_init_state.store(kTablesFailed, std::memory_order_release);
+      return false;
+    }
+    const size_t n = inflate_table_blob(
+        table_blob::compressed, table_blob::compressed_size, dense,
+        table_blob::dense_uncompressed_size);
+    if (n != table_blob::dense_uncompressed_size) {
+      delete[] dense;
+      delete[] buffer;
+      tables_init_state.store(kTablesFailed, std::memory_order_release);
+      return false;
+    }
+    if (!detail::expand_dense_to_working(
+            dense, table_blob::dense_uncompressed_size, buffer)) {
+      delete[] dense;
+      delete[] buffer;
+      tables_init_state.store(kTablesFailed, std::memory_order_release);
+      return false;
+    }
+    delete[] dense;
+#else
+    const size_t n = inflate_table_blob(table_blob::compressed,
+                                        table_blob::compressed_size, buffer,
+                                        table_blob::uncompressed_size);
     if (n != table_blob::uncompressed_size) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);
@@ -165,6 +227,7 @@ namespace {
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;
     }
+#endif
 
     if (crc32_ieee(buffer, table_blob::uncompressed_size) !=
         table_blob::uncompressed_crc32) {

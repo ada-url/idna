@@ -11,6 +11,7 @@ constexpr size_t uncompressed_size = 142624;
 constexpr size_t compressed_size = 24496;
 constexpr uint32_t uncompressed_crc32 = 0xB18DC7F3u;
 constexpr uint32_t filter_version = 1u;
+#define ADA_IDNA_FILTER_VERSION 1
 constexpr size_t decomposition_block_rows = 24;
 constexpr size_t decomposition_block_cols = 257;
 constexpr size_t ccc_block_rows = 66;

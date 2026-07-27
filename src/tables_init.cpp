@@ -1,4 +1,4 @@
-// Cold table init: inflate, unfilter, CRC, publish pointers.
+// Cold table init: inflate, unfilter/expand, CRC, publish pointers.
 // Compiled with -Os so the large blob and inflater do not bloat the hot -O3 TU.
 #include "table_store.hpp"
 #include "raw_inflate.hpp"
@@ -12,6 +12,8 @@ namespace ada::idna {
 namespace detail {
 
 [[nodiscard]] bool unfilter_table_blob(uint8_t* buffer) noexcept {
+  // v0: nothing. v1: reverse delta + byte-plane. v2 uses expand_dense instead;
+  // unfilter remains available for the pure unit test that exercises LE decode.
   if constexpr (table_blob::filter_version == 0) {
     (void)buffer;
     return true;
@@ -146,6 +148,10 @@ namespace {
       return false;
     }
 
+    // filter_version 0/1: inflate into the working multi-stage buffer, then
+    // reverse the pack-time prefilter (v1) or use the stream as-is (v0).
+    // (Dense filter_version 2 expand-at-init is available via dense_expand.hpp
+    // + pack_tables FILTER_VERSION=2, but the default pack path stays v1.)
     const size_t n = deflate::inflate_raw(table_blob::compressed,
                                           table_blob::compressed_size, buffer,
                                           table_blob::uncompressed_size);
@@ -154,14 +160,14 @@ namespace {
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;
     }
-
     if (!detail::unfilter_table_blob(buffer)) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;
     }
 
-    if (crc32_ieee(buffer, n) != table_blob::uncompressed_crc32) {
+    if (crc32_ieee(buffer, table_blob::uncompressed_size) !=
+        table_blob::uncompressed_crc32) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;

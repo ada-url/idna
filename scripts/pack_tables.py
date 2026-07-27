@@ -90,9 +90,18 @@ ALIGN = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
 PACK = {"u8": "B", "u16": "H", "u32": "I", "u64": "Q"}
 WIDTH = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
 
-# On-disk prefilter version. v1 = per-section delta (u16/u32) + byte-plane split
-# (u16/u32/u64) before raw DEFLATE. Runtime reverses the filter after inflate.
+# On-disk prefilter version.
+#   v0 = raw multi-stage (legacy)
+#   v1 = per-section delta (u16/u32) + byte-plane split before raw DEFLATE
+#   v2 = dense run/sparse encoding; inflate then expand_dense() to multi-stage
+#
+# Default is v1 of the *IDNA-closure* multi-stage tables (built via dense_pack
+# expand at pack time). That is smaller on disk than full-Unicode multi-stage
+# and avoids a large runtime expander (v2).
 FILTER_VERSION = 1
+# When True with FILTER_VERSION==1, rewrite sections through dense build/expand
+# so NFC tables only cover the IDNA alphabet closure (much smaller blob).
+USE_IDNA_CLOSURE_TABLES = True
 
 
 def _delta_encode(data: bytes, width: int) -> bytes:
@@ -235,6 +244,60 @@ def _best_raw_deflate(data: bytes) -> bytes:
     return best
 
 
+def _low_range_end() -> int:
+    mt = MAPPING_CPP.read_text()
+    m = re.search(r"IDNA_LOW_RANGE_END\s*=\s*0x([0-9A-Fa-f]+)", mt)
+    if not m:
+        raise SystemExit(f"IDNA_LOW_RANGE_END not found in {MAPPING_CPP}")
+    return int(m.group(1), 16)
+
+
+def _pack_sections_plain(
+    sections: dict[str, Any],
+) -> tuple[bytes, list[tuple[str, int, int, str, int]], dict[str, int]]:
+    """Pack multi-stage sections into the aligned working buffer."""
+    meta_in = sections.get("_meta") or {}
+    blob = bytearray()
+    layout: list[tuple[str, int, int, str, int]] = []
+
+    def align(a: int) -> None:
+        while len(blob) % a:
+            blob.append(0)
+
+    for name, kind in SECTION_ORDER:
+        if name not in sections:
+            raise SystemExit(f"pack missing section {name}")
+        vals = sections[name]
+        a = ALIGN[kind]
+        align(a)
+        off = len(blob)
+        fmt = "<" + PACK[kind] * len(vals)
+        blob.extend(struct.pack(fmt, *vals))
+        layout.append((name, off, len(vals) * WIDTH[kind], kind, len(vals)))
+
+    meta = {
+        "decomposition_block_rows": meta_in.get(
+            "decomposition_block_rows",
+            len(sections["decomposition_block"]) // 257,
+        ),
+        "decomposition_block_cols": 257,
+        "ccc_block_rows": meta_in.get(
+            "ccc_block_rows", len(sections["ccc_block"]) // 256
+        ),
+        "ccc_block_cols": 256,
+        "composition_block_rows": meta_in.get(
+            "composition_block_rows",
+            len(sections["composition_block"]) // 257,
+        ),
+        "composition_block_cols": 257,
+        "id_continue_count": len(sections["id_continue_flat"]) // 2,
+        "id_start_count": len(sections["id_start_flat"]) // 2,
+        "dir_table_count": len(sections["dir_start"]),
+        "combining_range_count": len(sections["combining_flat"]) // 2,
+    }
+    return bytes(blob), layout, meta
+
+
 def _parse_blob_meta(text: str, data_text: str | None = None) -> dict[str, Any]:
     # Payload may live in table_blob.inc (legacy/combined) or table_blob_data.inc.
     search_text = text
@@ -274,7 +337,8 @@ def _parse_blob_meta(text: str, data_text: str | None = None) -> dict[str, Any]:
             r"constexpr size_t (decomposition_block_rows|decomposition_block_cols|"
             r"ccc_block_rows|ccc_block_cols|composition_block_rows|"
             r"composition_block_cols|id_continue_count|id_start_count|"
-            r"dir_table_count|combining_range_count) = (\d+);",
+            r"dir_table_count|combining_range_count|dense_uncompressed_size|"
+            r"low_range_end) = (\d+);",
             text,
         )
     }
@@ -283,20 +347,45 @@ def _parse_blob_meta(text: str, data_text: str | None = None) -> dict[str, Any]:
     fv_m = re.search(r"filter_version = (\d+)u?;", text)
     filter_version = int(fv_m.group(1)) if fv_m else 0
 
-    filtered = zlib.decompress(compressed, -15)
-    if len(filtered) != us:
-        raise SystemExit(
-            f"blob size mismatch: decompressed {len(filtered)} != declared {us}"
-        )
+    payload = zlib.decompress(compressed, -15)
     layout = _layout_from_meta(offs, counts)
-    if filter_version >= 1:
-        plain = _unfilter_blob(filtered, layout)
+    if filter_version >= 2:
+        from dense_pack import expand_dense
+
+        dense_us = meta.get("dense_uncompressed_size", len(payload))
+        if len(payload) != dense_us:
+            raise SystemExit(
+                f"dense size mismatch: decompressed {len(payload)} != declared {dense_us}"
+            )
+        low = meta.get("low_range_end", _low_range_end())
+        expanded = expand_dense(payload, low)
+        plain, layout, exp_meta = _pack_sections_plain(expanded)
+        # Prefer expanded meta counts (should match header).
+        meta = {**meta, **exp_meta}
+        if len(plain) != us:
+            raise SystemExit(
+                f"expanded working size {len(plain)} != declared uncompressed_size {us}"
+            )
+    elif filter_version >= 1:
+        if len(payload) != us:
+            raise SystemExit(
+                f"blob size mismatch: decompressed {len(payload)} != declared {us}"
+            )
+        plain = _unfilter_blob(payload, layout)
     else:
-        plain = filtered
+        if len(payload) != us:
+            raise SystemExit(
+                f"blob size mismatch: decompressed {len(payload)} != declared {us}"
+            )
+        plain = payload
     return {
         "plain": plain,
-        "offs": offs,
-        "counts": counts,
+        "offs": {name: off for name, off, _n, _k, _c in layout}
+        if filter_version >= 2
+        else offs,
+        "counts": {name: count for name, _o, _n, _k, count in layout}
+        if filter_version >= 2
+        else counts,
         "meta": meta,
         "filter_version": filter_version,
         "layout": layout,
@@ -331,57 +420,37 @@ def load_blob_sections(path: Path = BLOB_PATH) -> dict[str, list[int]]:
 
 def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
     """Write sections (name -> list[int]) as src/table_blob.inc."""
-    meta_in = sections.get("_meta") or {}
-    blob = bytearray()
-    layout: list[tuple[str, int, int, str, int]] = []
+    dense_uncompressed_size = 0
+    low_range_end = _low_range_end()
+    write_sections = sections
+    dense_payload: bytes | None = None
 
-    def align(a: int) -> None:
-        while len(blob) % a:
-            blob.append(0)
+    if FILTER_VERSION >= 2 or USE_IDNA_CLOSURE_TABLES:
+        from dense_pack import build_dense, expand_dense
 
-    for name, kind in SECTION_ORDER:
-        if name not in sections:
-            raise SystemExit(f"write_blob missing section {name}")
-        vals = sections[name]
-        a = ALIGN[kind]
-        align(a)
-        off = len(blob)
-        fmt = "<" + PACK[kind] * len(vals)
-        blob.extend(struct.pack(fmt, *vals))
-        layout.append((name, off, len(vals) * WIDTH[kind], kind, len(vals)))
+        # Rebuild multi-stage from dense (IDNA alphabet NFC-closure).
+        dense_payload, dmeta = build_dense(sections, MAPPING_CPP)
+        low_range_end = dmeta["low_range_end"]
+        dense_uncompressed_size = len(dense_payload)
+        write_sections = expand_dense(dense_payload, low_range_end)
 
-    plain = bytes(blob)
-    # CRC-32 over the *logical* little-endian table payload (after unfilter).
-    uncompressed_crc32 = zlib.crc32(plain) & 0xFFFFFFFF
-    # Prefilter then raw-DEFLATE for a smaller on-disk image. Runtime inflates
-    # into a same-sized buffer, unfilters in place, then checks this CRC.
-    filtered = _filter_blob(plain, layout)
-    assert _unfilter_blob(filtered, layout) == plain
-    compressed = _best_raw_deflate(filtered)
-    assert _unfilter_blob(zlib.decompress(compressed, -15), layout) == plain
-
-    # Derive high-level counts used by table_store.hpp
-    # Fixed multi-stage dimensions (Unicode page tables).
-    meta = {
-        "decomposition_block_rows": meta_in.get(
-            "decomposition_block_rows",
-            len(sections["decomposition_block"]) // 257,
-        ),
-        "decomposition_block_cols": 257,
-        "ccc_block_rows": meta_in.get(
-            "ccc_block_rows", len(sections["ccc_block"]) // 256
-        ),
-        "ccc_block_cols": 256,
-        "composition_block_rows": meta_in.get(
-            "composition_block_rows",
-            len(sections["composition_block"]) // 257,
-        ),
-        "composition_block_cols": 257,
-        "id_continue_count": len(sections["id_continue_flat"]) // 2,
-        "id_start_count": len(sections["id_start_flat"]) // 2,
-        "dir_table_count": len(sections["dir_start"]),
-        "combining_range_count": len(sections["combining_flat"]) // 2,
-    }
+    if FILTER_VERSION >= 2:
+        assert dense_payload is not None
+        plain, layout, meta = _pack_sections_plain(write_sections)
+        uncompressed_crc32 = zlib.crc32(plain) & 0xFFFFFFFF
+        compressed = _best_raw_deflate(dense_payload)
+        assert zlib.decompress(compressed, -15) == dense_payload
+        meta["dense_uncompressed_size"] = dense_uncompressed_size
+        meta["low_range_end"] = low_range_end
+    else:
+        plain, layout, meta = _pack_sections_plain(write_sections)
+        uncompressed_crc32 = zlib.crc32(plain) & 0xFFFFFFFF
+        filtered = _filter_blob(plain, layout)
+        assert _unfilter_blob(filtered, layout) == plain
+        compressed = _best_raw_deflate(filtered)
+        assert _unfilter_blob(zlib.decompress(compressed, -15), layout) == plain
+        # Optional metadata for tools / future dense expand paths.
+        meta["low_range_end"] = low_range_end
 
     def c_bytes(data: bytes, per: int = 16) -> str:
         lines = []
@@ -393,7 +462,7 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
     # Meta header (sizes/offsets only) — safe to include from hot TUs.
     meta_out: list[str] = [
         "// Auto-generated by scripts/pack_tables.py - do not edit.",
-        "// Compressed Unicode/IDNA tables (filter + raw DEFLATE) — metadata.",
+        "// Compressed Unicode/IDNA tables (dense/filter + raw DEFLATE) — metadata.",
         "// Payload bytes live in table_blob_data.inc (cold init TU only).",
         "// clang-format off",
         "#ifndef ADA_IDNA_TABLE_BLOB_H",
@@ -408,28 +477,22 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
     ]
     for k, v in meta.items():
         meta_out.append(f"constexpr size_t {k} = {v};")
-    meta_out.append("// Offsets into the decompressed (then unfiltered) buffer:")
+    meta_out.append("// Offsets into the expanded working buffer:")
     for name, off, _nbytes, _kind, count in layout:
         meta_out.append(f"constexpr size_t off_{name} = {off};")
         meta_out.append(f"constexpr size_t count_{name} = {count};")
-    # Declaration only — definition is in table_blob_data.inc / tables_init.cpp.
-    meta_out.append(
-        "extern const uint8_t compressed[compressed_size];"
-    )
+    meta_out.append("extern const uint8_t compressed[compressed_size];")
     meta_out.append("}  // namespace ada::idna::table_blob")
     meta_out.append("#endif")
 
-    # Data header — included only from the cold tables_init TU.
     data_out: list[str] = [
         "// Auto-generated by scripts/pack_tables.py - do not edit.",
-        "// Compressed table payload (filter + raw DEFLATE).",
+        "// Compressed table payload (dense/filter + raw DEFLATE).",
         "// clang-format off",
         "#ifndef ADA_IDNA_TABLE_BLOB_DATA_H",
         "#define ADA_IDNA_TABLE_BLOB_DATA_H",
         '#include "table_blob.inc"',
         "namespace ada::idna::table_blob {",
-        # External linkage (not constexpr) so it matches the extern declaration
-        # in table_blob.inc and is visible to the linker from tables_init.cpp.
         "alignas(8) const uint8_t compressed[compressed_size] = {",
         c_bytes(compressed),
         "};",
@@ -438,51 +501,15 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
         "#endif",
     ]
 
-    # Combined view for scripts/_parse_blob_meta (array + meta in one file).
-    combined: list[str] = [
-        "// Auto-generated by scripts/pack_tables.py - do not edit.",
-        "// Combined meta+data view for pack_tables.py reload.",
-        "// C++ builds use table_blob.inc (meta) + table_blob_data.inc (data).",
-        "// clang-format off",
-        "#ifndef ADA_IDNA_TABLE_BLOB_H",
-        "#define ADA_IDNA_TABLE_BLOB_H",
-        "#include <cstdint>",
-        "#include <cstddef>",
-        "namespace ada::idna::table_blob {",
-        f"constexpr size_t uncompressed_size = {len(plain)};",
-        f"constexpr size_t compressed_size = {len(compressed)};",
-        f"constexpr uint32_t uncompressed_crc32 = 0x{uncompressed_crc32:08X}u;",
-        f"constexpr uint32_t filter_version = {FILTER_VERSION}u;",
-    ]
-    for k, v in meta.items():
-        combined.append(f"constexpr size_t {k} = {v};")
-    combined.append("// Offsets into the decompressed (then unfiltered) buffer:")
-    for name, off, _nbytes, _kind, count in layout:
-        combined.append(f"constexpr size_t off_{name} = {off};")
-        combined.append(f"constexpr size_t count_{name} = {count};")
-    combined.append("alignas(8) inline constexpr uint8_t compressed[] = {")
-    combined.append(c_bytes(compressed))
-    combined.append("};")
-    combined.append("}  // namespace ada::idna::table_blob")
-    combined.append("#endif")
-
-    path.write_text("\n".join(combined) + "\n")
-    # Overwrite table_blob.inc with META-only for C++ hot includes... wait, path IS
-    # table_blob.inc. Scripts need the combined form to reload. C++ meta-only goes
-    # to the same path if we teach C++ to use a different split:
-    #   - src/table_blob.inc        = meta only (what C++ includes)
-    #   - src/table_blob_data.inc   = data only
-    #   - scripts parse data from table_blob_data.inc OR keep combined in data file
-    #
-    # pack_tables reloads via BLOB_PATH: parse compressed[] from data file when
-    # meta has no array. Write meta to BLOB_PATH and data to BLOB_DATA_PATH;
-    # _parse_blob_meta reads both.
     path.write_text("\n".join(meta_out) + "\n")
     BLOB_DATA_PATH.write_text("\n".join(data_out) + "\n")
+    kind = "dense" if FILTER_VERSION >= 2 else "filter"
     print(
         f"Wrote {path.relative_to(ROOT)} + {BLOB_DATA_PATH.relative_to(ROOT)}: "
-        f"{len(plain)} raw -> filter -> {len(compressed)} compressed "
-        f"({100 * len(compressed) / len(plain):.1f}%)"
+        f"working {len(plain)} <- {kind} "
+        f"{dense_uncompressed_size if FILTER_VERSION >= 2 else len(plain)} "
+        f"-> {len(compressed)} compressed "
+        f"({100 * len(compressed) / max(len(plain), 1):.1f}% of working)"
     )
 
 

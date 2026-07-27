@@ -1,8 +1,9 @@
 // Runtime store for compressed Unicode/IDNA tables.
-// Large tables are DEFLATE-compressed (read-only) and expanded once on first
-// use into a heap buffer so the working set does not bloat the on-disk binary.
-// Hot-path lookups use the same O(1) multi-stage layout as the pre-compression
-// code; compression only affects on-disk size and one-time init.
+// Large tables are prefiltered (delta + byte-plane split) then raw-DEFLATE
+// compressed (read-only) and expanded once on first use into a heap buffer so
+// the working set does not bloat the on-disk binary. Hot-path lookups use the
+// same O(1) multi-stage layout as the pre-compression code; compression only
+// affects on-disk size and one-time init.
 //
 // Thread-safe without mutex: atomic CAS + spin-wait. ensure_tables() returns
 // false if initialization fails (OOM, corrupt blob); callers must treat that
@@ -104,6 +105,95 @@ inline void convert_table_blob_to_host_endian(uint8_t* buffer) noexcept {
   u32(table_blob::off_dir_start, table_blob::count_dir_start);
   u32(table_blob::off_dir_final, table_blob::count_dir_final);
   u32(table_blob::off_combining_flat, table_blob::count_combining_flat);
+}
+
+// Reverse pack_tables.py prefilters (filter_version >= 1) in place.
+// Encoded as a tiny table so the cold init path stays small in .text:
+//   kind 0 = u16 (split+delta), 1 = u32 (split+delta), 2 = u64 (split only)
+[[nodiscard]] inline bool unfilter_table_blob(uint8_t* buffer) noexcept {
+  if constexpr (table_blob::filter_version == 0) {
+    (void)buffer;
+    return true;
+  }
+
+  struct Sec {
+    uint32_t off;
+    uint32_t count;
+    uint8_t width;  // 2, 4, or 8
+    uint8_t delta;  // 1 = prefix-sum after unsplit
+  };
+  static constexpr Sec kSecs[] = {
+      {static_cast<uint32_t>(table_blob::off_idna_stage1),
+       static_cast<uint32_t>(table_blob::count_idna_stage1), 2, 1},
+      {static_cast<uint32_t>(table_blob::off_idna_stage2),
+       static_cast<uint32_t>(table_blob::count_idna_stage2), 2, 1},
+      {static_cast<uint32_t>(table_blob::off_idna_bool_blocks),
+       static_cast<uint32_t>(table_blob::count_idna_bool_blocks), 8, 0},
+      {static_cast<uint32_t>(table_blob::off_decomposition_block),
+       static_cast<uint32_t>(table_blob::count_decomposition_block), 2, 1},
+      {static_cast<uint32_t>(table_blob::off_decomposition_data),
+       static_cast<uint32_t>(table_blob::count_decomposition_data), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_composition_block),
+       static_cast<uint32_t>(table_blob::count_composition_block), 2, 1},
+      {static_cast<uint32_t>(table_blob::off_composition_data),
+       static_cast<uint32_t>(table_blob::count_composition_data), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_id_continue_flat),
+       static_cast<uint32_t>(table_blob::count_id_continue_flat), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_id_start_flat),
+       static_cast<uint32_t>(table_blob::count_id_start_flat), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_dir_start),
+       static_cast<uint32_t>(table_blob::count_dir_start), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_dir_final),
+       static_cast<uint32_t>(table_blob::count_dir_final), 4, 1},
+      {static_cast<uint32_t>(table_blob::off_combining_flat),
+       static_cast<uint32_t>(table_blob::count_combining_flat), 4, 1},
+  };
+
+  size_t scratch_need = 0;
+  for (const Sec& s : kSecs) {
+    const size_t bytes = static_cast<size_t>(s.count) * s.width;
+    if (bytes > scratch_need) scratch_need = bytes;
+  }
+  uint8_t* scratch = new (std::nothrow) uint8_t[scratch_need];
+  if (scratch == nullptr) {
+    return false;
+  }
+
+  for (const Sec& s : kSecs) {
+    uint8_t* data = buffer + s.off;
+    const size_t count = s.count;
+    const size_t width = s.width;
+    // Byte-plane unsplit: planes were stored as width blocks of `count` bytes.
+    for (size_t i = 0; i < count; ++i) {
+      for (size_t b = 0; b < width; ++b) {
+        scratch[i * width + b] = data[b * count + i];
+      }
+    }
+    const size_t nbytes = count * width;
+    for (size_t i = 0; i < nbytes; ++i) {
+      data[i] = scratch[i];
+    }
+    if (s.delta) {
+      if (width == 2) {
+        uint16_t* p = reinterpret_cast<uint16_t*>(data);
+        uint16_t prev = 0;
+        for (size_t i = 0; i < count; ++i) {
+          prev = static_cast<uint16_t>(prev + p[i]);
+          p[i] = prev;
+        }
+      } else {  // width == 4
+        uint32_t* p = reinterpret_cast<uint32_t*>(data);
+        uint32_t prev = 0;
+        for (size_t i = 0; i < count; ++i) {
+          prev += p[i];
+          p[i] = prev;
+        }
+      }
+    }
+  }
+
+  delete[] scratch;
+  return true;
 }
 
 }  // namespace detail
@@ -292,8 +382,21 @@ inline constexpr uint64_t kTablesSpinLimit = 1'000'000'000ull;
     const size_t n = deflate::inflate_raw(table_blob::compressed,
                                           table_blob::compressed_size, buffer,
                                           table_blob::uncompressed_size);
-    if (n != table_blob::uncompressed_size ||
-        crc32_ieee(buffer, n) != table_blob::uncompressed_crc32) {
+    if (n != table_blob::uncompressed_size) {
+      delete[] buffer;
+      tables_init_state.store(kTablesFailed, std::memory_order_release);
+      return false;
+    }
+
+    // Inflate yields the prefiltered stream; reverse to logical LE tables.
+    if (!detail::unfilter_table_blob(buffer)) {
+      delete[] buffer;
+      tables_init_state.store(kTablesFailed, std::memory_order_release);
+      return false;
+    }
+
+    // CRC covers the logical (unfiltered) little-endian payload.
+    if (crc32_ieee(buffer, n) != table_blob::uncompressed_crc32) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;

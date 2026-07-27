@@ -4,7 +4,9 @@ message(STATUS "CMAKE_BUILD_TYPE : " ${CMAKE_BUILD_TYPE})
 add_library(ada-idna-include-source INTERFACE)
 target_include_directories(ada-idna-include-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 add_library(ada-idna-source INTERFACE)
-target_sources(ada-idna-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna.cpp)
+target_sources(ada-idna-source INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna.cpp
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/tables_init.cpp)
 target_link_libraries(ada-idna-source INTERFACE ada-include-source)
 add_library(ada-idna idna.cpp tables_init.cpp)
 target_compile_features(ada-idna PUBLIC cxx_std_20)

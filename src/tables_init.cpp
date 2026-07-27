@@ -75,20 +75,31 @@ namespace detail {
     for (size_t i = 0; i < nbytes; ++i) {
       data[i] = scratch[i];
     }
+    // Delta payload is little-endian (pack_tables.py uses '<H'/'<I'). Always
+    // load/store via bytes so big-endian hosts decode before host bswap.
     if (s.delta) {
       if (width == 2) {
-        auto* p = reinterpret_cast<uint16_t*>(data);
         uint16_t prev = 0;
         for (size_t i = 0; i < count; ++i) {
-          prev = static_cast<uint16_t>(prev + p[i]);
-          p[i] = prev;
+          const uint16_t d = static_cast<uint16_t>(
+              data[i * 2] | (static_cast<uint16_t>(data[i * 2 + 1]) << 8));
+          prev = static_cast<uint16_t>(prev + d);
+          data[i * 2] = static_cast<uint8_t>(prev & 0xffu);
+          data[i * 2 + 1] = static_cast<uint8_t>((prev >> 8) & 0xffu);
         }
-      } else {
-        auto* p = reinterpret_cast<uint32_t*>(data);
+      } else {  // width == 4
         uint32_t prev = 0;
         for (size_t i = 0; i < count; ++i) {
-          prev += p[i];
-          p[i] = prev;
+          const uint32_t d =
+              static_cast<uint32_t>(data[i * 4]) |
+              (static_cast<uint32_t>(data[i * 4 + 1]) << 8) |
+              (static_cast<uint32_t>(data[i * 4 + 2]) << 16) |
+              (static_cast<uint32_t>(data[i * 4 + 3]) << 24);
+          prev += d;
+          data[i * 4] = static_cast<uint8_t>(prev & 0xffu);
+          data[i * 4 + 1] = static_cast<uint8_t>((prev >> 8) & 0xffu);
+          data[i * 4 + 2] = static_cast<uint8_t>((prev >> 16) & 0xffu);
+          data[i * 4 + 3] = static_cast<uint8_t>((prev >> 24) & 0xffu);
         }
       }
     }

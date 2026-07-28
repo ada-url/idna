@@ -28,22 +28,16 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           branch: ${{ matrix.arch == 'riscv64' && 'edge' || 'latest-stable' }}
-          # Keep the initial package set small; setup-alpine has been flaky when
-          # installing a long list (apk database "file format is invalid").
-          packages: build-base
-      - name: Install build packages
-        run: |
-          # Retry once: Alpine QEMU images occasionally race the apk db.
-          for attempt in 1 2 3; do
-            apk update && apk add --no-cache \
-              cmake g++ linux-headers git bash zlib-dev binutils \
-              && break
-            echo "apk add failed (attempt $attempt), retrying..."
-            sleep 2
-          done
-          command -v cmake
-          command -v g++
-        shell: alpine.sh {0}
+          # Installed as root during setup (later alpine.sh steps are non-root).
+          packages: >
+            build-base
+            cmake
+            g++
+            linux-headers
+            git
+            bash
+            zlib-dev
+            binutils
       - name: Prepare
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON

@@ -46,21 +46,37 @@ if(ADA_USE_SIMDUTF)
   target_compile_definitions(ada-idna-cold PRIVATE ADA_USE_SIMDUTF)
 endif()
 
-if(MSVC OR NOT CMAKE_STRIP OR NOT CMAKE_LINKER)
-  # Portable path: multi-member static archive (works on MSVC).
-  add_library(ada-idna STATIC
-    $<TARGET_OBJECTS:ada-idna-hot>
-    $<TARGET_OBJECTS:ada-idna-cold>)
-  add_dependencies(ada-idna ada-idna-hot ada-idna-cold)
-else()
-  # Unix: one relocatable object → thinner .a (size goal measurement).
-  set(ADA_IDNA_MERGED_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ada_idna_merged${CMAKE_CXX_OUTPUT_EXTENSION}")
+# Prefer a single archive member on Unix (smaller .a). Fall back to a normal
+# multi-object static lib on MSVC or if the merge tools are unavailable.
+set(ADA_IDNA_CAN_MERGE FALSE)
+if(NOT MSVC AND NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
+  find_program(ADA_IDNA_LD NAMES ld ${CMAKE_LINKER})
+  find_program(ADA_IDNA_STRIP NAMES strip ${CMAKE_STRIP})
+  if(ADA_IDNA_LD)
+    set(ADA_IDNA_CAN_MERGE TRUE)
+  endif()
+endif()
+
+if(ADA_IDNA_CAN_MERGE)
+  set(ADA_IDNA_MERGED_OBJ
+      "${CMAKE_CURRENT_BINARY_DIR}/ada_idna_merged${CMAKE_CXX_OUTPUT_EXTENSION}")
+  # Use a small shell script so strip failure is non-fatal (musl/busybox strip
+  # variants differ) and so we can fall back cleanly.
+  set(ADA_IDNA_MERGE_SH "${CMAKE_CURRENT_BINARY_DIR}/merge_ada_idna.sh")
+  file(WRITE "${ADA_IDNA_MERGE_SH}" "#!/bin/sh
+set -e
+out=\"\$1\"
+shift
+\"${ADA_IDNA_LD}\" -r -o \"\$out\" \"\$@\"
+if [ -n \"${ADA_IDNA_STRIP}\" ] && command -v \"${ADA_IDNA_STRIP}\" >/dev/null 2>&1; then
+  \"${ADA_IDNA_STRIP}\" -x \"\$out\" 2>/dev/null || true
+fi
+")
   add_custom_command(
     OUTPUT "${ADA_IDNA_MERGED_OBJ}"
-    COMMAND ${CMAKE_LINKER} -r -o "${ADA_IDNA_MERGED_OBJ}"
+    COMMAND /bin/sh "${ADA_IDNA_MERGE_SH}" "${ADA_IDNA_MERGED_OBJ}"
             $<TARGET_OBJECTS:ada-idna-hot>
             $<TARGET_OBJECTS:ada-idna-cold>
-    COMMAND ${CMAKE_STRIP} -x "${ADA_IDNA_MERGED_OBJ}"
     DEPENDS ada-idna-hot ada-idna-cold
     COMMENT "Merging ada-idna hot+cold objects into one archive member"
     VERBATIM
@@ -70,6 +86,11 @@ else()
   add_library(ada-idna STATIC "${ADA_IDNA_MERGED_OBJ}")
   set_target_properties(ada-idna PROPERTIES LINKER_LANGUAGE CXX)
   add_dependencies(ada-idna ada-idna-merged)
+else()
+  add_library(ada-idna STATIC
+    $<TARGET_OBJECTS:ada-idna-hot>
+    $<TARGET_OBJECTS:ada-idna-cold>)
+  add_dependencies(ada-idna ada-idna-hot ada-idna-cold)
 endif()
 
 target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")

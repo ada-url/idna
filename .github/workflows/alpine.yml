@@ -34,7 +34,8 @@ jobs:
             linux-headers
             git
             bash
-            build-base
+            zlib-dev
+            binutils
       - name: Prepare
         run: |
           cmake -B build

@@ -8,6 +8,7 @@ jobs:
     name: Build on Alpine ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch:
           - x86_64
@@ -18,7 +19,7 @@ jobs:
           - riscv64
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Install extra dependencies
         run: |
           sudo apt update && sudo apt install -y binfmt-support
@@ -27,24 +28,31 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           branch: ${{ matrix.arch == 'riscv64' && 'edge' || 'latest-stable' }}
-          packages: >
-            build-base
-            cmake
-            g++
-            linux-headers
-            git
-            bash
-            zlib-dev
-            binutils
+          # Keep the initial package set small; setup-alpine has been flaky when
+          # installing a long list (apk database "file format is invalid").
+          packages: build-base
+      - name: Install build packages
+        run: |
+          # Retry once: Alpine QEMU images occasionally race the apk db.
+          for attempt in 1 2 3; do
+            apk update && apk add --no-cache \
+              cmake g++ linux-headers git bash zlib-dev binutils \
+              && break
+            echo "apk add failed (attempt $attempt), retrying..."
+            sleep 2
+          done
+          command -v cmake
+          command -v g++
+        shell: alpine.sh {0}
       - name: Prepare
         run: |
-          cmake -B build
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
         shell: alpine.sh {0}
       - name: Build
         run: |
-          cmake --build build
+          cmake --build build -j$(nproc)
         shell: alpine.sh {0}
       - name: Test
         run: |
-          ctest --test-dir build --output-on-failure 
+          ctest --test-dir build --output-on-failure
         shell: alpine.sh {0}

@@ -1,11 +1,11 @@
 #pragma once
-// Compact expand of filter_version 2 dense payload → multi-stage working buffer.
-// Matches scripts/dense_pack.py expand_dense() (CRC-checked).
-#include "table_blob.inc"
-
+// Compact expand of filter_version 2 dense payload → multi-stage working
+// buffer. Matches scripts/dense_pack.py expand_dense() (CRC-checked).
 #include <cstdint>
 #include <cstring>
 #include <new>
+
+#include "table_blob.inc"
 
 namespace ada::idna::detail {
 
@@ -56,7 +56,8 @@ inline void store_u64(uint8_t* p, uint64_t v) noexcept {
   }
 }
 
-// Find identical NUL-terminated utf8 string already stored; return offset or -1.
+// Find identical NUL-terminated utf8 string already stored; return offset or
+// -1.
 inline int find_utf8(const uint8_t* utf8, size_t utf8_n, const uint8_t* s,
                      size_t sn) noexcept {
   size_t i = 0;
@@ -133,7 +134,8 @@ inline bool eq_u16n(const uint16_t* a, const uint16_t* b, size_t n) noexcept {
   }
 
   // utf8 built in working region later; temp buffer first.
-  uint8_t* utf8 = new (std::nothrow) uint8_t[table_blob::count_idna_utf8_mappings];
+  uint8_t* utf8 =
+      new (std::nothrow) uint8_t[table_blob::count_idna_utf8_mappings];
   if (!utf8) {
     delete[] flat;
     return false;
@@ -208,7 +210,8 @@ inline bool eq_u16n(const uint16_t* a, const uint16_t* b, size_t n) noexcept {
   // two-level into temp then copy
   uint16_t* stage1 = new (std::nothrow) uint16_t[table_blob::count_idna_stage1];
   uint16_t* mixed = new (std::nothrow) uint16_t[table_blob::count_idna_stage2];
-  uint64_t* bools = new (std::nothrow) uint64_t[table_blob::count_idna_bool_blocks];
+  uint64_t* bools =
+      new (std::nothrow) uint64_t[table_blob::count_idna_bool_blocks];
   if (!stage1 || !mixed || !bools) {
     delete[] flat;
     delete[] utf8;
@@ -732,8 +735,7 @@ inline bool eq_u16n(const uint16_t* a, const uint16_t* b, size_t n) noexcept {
     return false;
   }
   uint32_t n_dir = 0;
-  if (!read_varint(rp, rend, n_dir) ||
-      n_dir != table_blob::count_dir_start) {
+  if (!read_varint(rp, rend, n_dir) || n_dir != table_blob::count_dir_start) {
     delete[] utf8;
     delete[] stage1;
     delete[] mixed;
@@ -777,9 +779,9 @@ inline bool eq_u16n(const uint16_t* a, const uint16_t* b, size_t n) noexcept {
   std::memcpy(working + table_blob::off_decomposition_index, dindex, kNPages);
   for (size_t bi = 0; bi < n_dblocks; ++bi) {
     for (size_t j = 0; j < 257; ++j) {
-      store_u16(working + table_blob::off_decomposition_block +
-                    (bi * 257 + j) * 2,
-                dblocks[bi][j]);
+      store_u16(
+          working + table_blob::off_decomposition_block + (bi * 257 + j) * 2,
+          dblocks[bi][j]);
     }
   }
   for (size_t i = 0; i < decomp_data_n; ++i) {

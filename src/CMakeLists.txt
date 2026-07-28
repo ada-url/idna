@@ -9,22 +9,24 @@ target_sources(ada-idna-source INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna_cold.cpp)
 target_link_libraries(ada-idna-source INTERFACE ada-include-source)
 
-# Object libraries so we can optimize hot vs cold separately, then ld -r into
-# a single archive member (one .o in the .a cuts SYMDEF/header overhead).
+# Split hot (-O3) vs cold (-Os) translation units. On Unix we optionally merge
+# the objects with ld -r into one archive member for a smaller .a; MSVC just
+# archives both objects (no POSIX ld -r).
 add_library(ada-idna-hot OBJECT idna_hot.cpp)
 add_library(ada-idna-cold OBJECT idna_cold.cpp)
-target_compile_features(ada-idna-hot PUBLIC cxx_std_20)
-target_compile_features(ada-idna-cold PUBLIC cxx_std_20)
-target_include_directories(ada-idna-hot PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_include_directories(ada-idna-cold PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_include_directories(ada-idna-hot PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
-target_include_directories(ada-idna-cold PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+foreach(t ada-idna-hot ada-idna-cold)
+  target_compile_features(${t} PUBLIC cxx_std_20)
+  target_include_directories(${t} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(${t} PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+endforeach()
 
 find_package(ZLIB)
 if(ZLIB_FOUND)
   target_link_libraries(ada-idna-cold PRIVATE ZLIB::ZLIB)
   target_compile_definitions(ada-idna-cold PRIVATE ADA_IDNA_USE_SYSTEM_ZLIB=1)
-  # Propagate to consumers of the static lib.
+  # INTERFACE source consumers compile idna_cold.cpp themselves.
+  target_link_libraries(ada-idna-source INTERFACE ZLIB::ZLIB)
+  target_compile_definitions(ada-idna-source INTERFACE ADA_IDNA_USE_SYSTEM_ZLIB=1)
   set(ADA_IDNA_NEEDS_ZLIB TRUE)
 else()
   message(STATUS "zlib not found; using in-tree raw DEFLATE inflater")
@@ -36,38 +38,48 @@ if(NOT MSVC)
   target_compile_options(ada-idna-cold PRIVATE -Os -fno-exceptions -fno-rtti)
 endif()
 
-# Merge objects into one relocatable .o, strip local symbols, archive.
-set(ADA_IDNA_MERGED_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ada_idna_merged.o")
-set(ADA_IDNA_HOT_OBJ "$<TARGET_OBJECTS:ada-idna-hot>")
-set(ADA_IDNA_COLD_OBJ "$<TARGET_OBJECTS:ada-idna-cold>")
+if(ADA_USE_SIMDUTF)
+  # OBJECT libs must link simdutf for include paths at compile time.
+  target_link_libraries(ada-idna-hot PRIVATE simdutf)
+  target_link_libraries(ada-idna-cold PRIVATE simdutf)
+  target_compile_definitions(ada-idna-hot PRIVATE ADA_USE_SIMDUTF)
+  target_compile_definitions(ada-idna-cold PRIVATE ADA_USE_SIMDUTF)
+endif()
 
-add_custom_command(
-  OUTPUT "${ADA_IDNA_MERGED_OBJ}"
-  COMMAND ${CMAKE_LINKER} -r -o "${ADA_IDNA_MERGED_OBJ}"
-          ${ADA_IDNA_HOT_OBJ} ${ADA_IDNA_COLD_OBJ}
-  COMMAND ${CMAKE_STRIP} -x "${ADA_IDNA_MERGED_OBJ}"
-  DEPENDS ada-idna-hot ada-idna-cold
-  COMMENT "Merging ada-idna hot+cold objects into one archive member"
-  VERBATIM
-  COMMAND_EXPAND_LISTS
-)
+if(MSVC OR NOT CMAKE_STRIP OR NOT CMAKE_LINKER)
+  # Portable path: multi-member static archive (works on MSVC).
+  add_library(ada-idna STATIC
+    $<TARGET_OBJECTS:ada-idna-hot>
+    $<TARGET_OBJECTS:ada-idna-cold>)
+  add_dependencies(ada-idna ada-idna-hot ada-idna-cold)
+else()
+  # Unix: one relocatable object → thinner .a (size goal measurement).
+  set(ADA_IDNA_MERGED_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ada_idna_merged${CMAKE_CXX_OUTPUT_EXTENSION}")
+  add_custom_command(
+    OUTPUT "${ADA_IDNA_MERGED_OBJ}"
+    COMMAND ${CMAKE_LINKER} -r -o "${ADA_IDNA_MERGED_OBJ}"
+            $<TARGET_OBJECTS:ada-idna-hot>
+            $<TARGET_OBJECTS:ada-idna-cold>
+    COMMAND ${CMAKE_STRIP} -x "${ADA_IDNA_MERGED_OBJ}"
+    DEPENDS ada-idna-hot ada-idna-cold
+    COMMENT "Merging ada-idna hot+cold objects into one archive member"
+    VERBATIM
+    COMMAND_EXPAND_LISTS
+  )
+  add_custom_target(ada-idna-merged DEPENDS "${ADA_IDNA_MERGED_OBJ}")
+  add_library(ada-idna STATIC "${ADA_IDNA_MERGED_OBJ}")
+  set_target_properties(ada-idna PROPERTIES LINKER_LANGUAGE CXX)
+  add_dependencies(ada-idna ada-idna-merged)
+endif()
 
-add_custom_target(ada-idna-merged DEPENDS "${ADA_IDNA_MERGED_OBJ}")
-
-add_library(ada-idna STATIC "${ADA_IDNA_MERGED_OBJ}")
-set_target_properties(ada-idna PROPERTIES LINKER_LANGUAGE CXX)
-add_dependencies(ada-idna ada-idna-merged)
 target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
 target_compile_features(ada-idna PUBLIC cxx_std_20)
 if(ADA_IDNA_NEEDS_ZLIB)
   target_link_libraries(ada-idna PUBLIC ZLIB::ZLIB)
 endif()
-
 if(ADA_USE_SIMDUTF)
-  target_link_libraries(ada-idna PRIVATE simdutf)
-  target_compile_definitions(ada-idna PRIVATE ADA_USE_SIMDUTF)
-  target_compile_definitions(ada-idna-hot PRIVATE ADA_USE_SIMDUTF)
-  target_compile_definitions(ada-idna-cold PRIVATE ADA_USE_SIMDUTF)
+  target_link_libraries(ada-idna PUBLIC simdutf)
+  target_compile_definitions(ada-idna PUBLIC ADA_USE_SIMDUTF)
 endif()
 
 if(MSVC)

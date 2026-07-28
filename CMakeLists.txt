@@ -12,16 +12,15 @@ include(GNUInstallDirs)
 include(CTest)
 include(cmake/idna-flags.cmake)
 
-add_subdirectory(src)
-
 option(ADA_USE_SIMDUTF "Whether to use SIMDUTF for unicode transcoding" OFF)
 
-if(ADA_IDNA_BENCHMARKS OR BUILD_TESTING)
+if(ADA_IDNA_BENCHMARKS OR BUILD_TESTING OR ADA_USE_SIMDUTF)
   include(cmake/CPM.cmake)
 endif()
 
+# simdutf must exist before add_subdirectory(src) so OBJECT libs can link it
+# for include paths when ADA_USE_SIMDUTF=ON.
 if(ADA_USE_SIMDUTF)
-  include(cmake/CPM.cmake)
   CPMAddPackage(
     NAME simdutf
     GITHUB_REPOSITORY simdutf/simdutf
@@ -29,6 +28,8 @@ if(ADA_USE_SIMDUTF)
     OPTIONS "SIMDUTF_TESTS OFF"
   )
 endif()
+
+add_subdirectory(src)
 
 if (ADA_IDNA_BENCHMARKS)
   message(STATUS "Ada benchmarks enabled.")

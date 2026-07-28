@@ -2,16 +2,15 @@
 // These TUs are built under the same pedantic flags as ada's g++-12 CI
 // (-Werror -Wextra -Wno-unused-parameter -Wimplicit-fallthrough) so that
 // unused-but-set locals in Huffman table construction cannot reappear.
-#include "gtest/gtest.h"
-
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
 
-#include "idna.h"
 #include "../src/raw_inflate.hpp"
 #include "../src/table_store.hpp"
+#include "gtest/gtest.h"
+#include "idna.h"
 // detail::bswap_inplace is exercised for BE host conversion regression.
 
 namespace {
@@ -105,8 +104,7 @@ namespace {
 // Mirror of scripts/pack_tables.py _filter_section for multi-byte kinds:
 // little-endian delta, then byte-plane split. Used only to *build* the
 // filtered fixture; the code under test is detail::unfilter_table_blob.
-void filter_section_le(uint8_t* data, size_t count, size_t width,
-                       bool delta) {
+void filter_section_le(uint8_t* data, size_t count, size_t width, bool delta) {
   std::vector<uint8_t> tmp(count * width);
   if (delta && width == 2) {
     uint16_t prev = 0;
@@ -121,11 +119,10 @@ void filter_section_le(uint8_t* data, size_t count, size_t width,
   } else if (delta && width == 4) {
     uint32_t prev = 0;
     for (size_t i = 0; i < count; ++i) {
-      const uint32_t v =
-          static_cast<uint32_t>(data[i * 4]) |
-          (static_cast<uint32_t>(data[i * 4 + 1]) << 8) |
-          (static_cast<uint32_t>(data[i * 4 + 2]) << 16) |
-          (static_cast<uint32_t>(data[i * 4 + 3]) << 24);
+      const uint32_t v = static_cast<uint32_t>(data[i * 4]) |
+                         (static_cast<uint32_t>(data[i * 4 + 1]) << 8) |
+                         (static_cast<uint32_t>(data[i * 4 + 2]) << 16) |
+                         (static_cast<uint32_t>(data[i * 4 + 3]) << 24);
       const uint32_t d = v - prev;
       prev = v;
       data[i * 4] = static_cast<uint8_t>(d & 0xffu);
@@ -174,7 +171,8 @@ void filter_blob_like_pack_tables(uint8_t* buffer) {
 
 // Drives shipped detail::unfilter_table_blob on a full-size buffer: fill
 // multi-byte sections with distinctive LE patterns, filter like pack_tables.py,
-// unfilter, and require byte-identical recovery (locks BE-safe LE delta decode).
+// unfilter, and require byte-identical recovery (locks BE-safe LE delta
+// decode).
 TEST(RawInflate, UnfilterTableBlobRoundTrip) {
   namespace tb = ada::idna::table_blob;
   const size_t n = tb::uncompressed_size;

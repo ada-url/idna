@@ -1,7 +1,7 @@
 // Cold table init: inflate, unfilter/expand, CRC, publish pointers.
 // Compiled with -Os so the large blob and inflater do not bloat the hot -O3 TU.
-#include "table_store.hpp"
 #include "table_blob_data.inc"
+#include "table_store.hpp"
 #if ADA_IDNA_FILTER_VERSION >= 2
 #include "dense_expand.hpp"
 #endif
@@ -132,11 +132,10 @@ namespace detail {
       } else {  // width == 4
         uint32_t prev = 0;
         for (size_t i = 0; i < count; ++i) {
-          const uint32_t d =
-              static_cast<uint32_t>(data[i * 4]) |
-              (static_cast<uint32_t>(data[i * 4 + 1]) << 8) |
-              (static_cast<uint32_t>(data[i * 4 + 2]) << 16) |
-              (static_cast<uint32_t>(data[i * 4 + 3]) << 24);
+          const uint32_t d = static_cast<uint32_t>(data[i * 4]) |
+                             (static_cast<uint32_t>(data[i * 4 + 1]) << 8) |
+                             (static_cast<uint32_t>(data[i * 4 + 2]) << 16) |
+                             (static_cast<uint32_t>(data[i * 4 + 3]) << 24);
           prev += d;
           data[i * 4] = static_cast<uint8_t>(prev & 0xffu);
           data[i * 4 + 1] = static_cast<uint8_t>((prev >> 8) & 0xffu);
@@ -196,9 +195,9 @@ namespace {
       tables_init_state.store(kTablesFailed, std::memory_order_release);
       return false;
     }
-    const size_t n = inflate_table_blob(
-        table_blob::compressed, table_blob::compressed_size, dense,
-        table_blob::dense_uncompressed_size);
+    const size_t n =
+        inflate_table_blob(table_blob::compressed, table_blob::compressed_size,
+                           dense, table_blob::dense_uncompressed_size);
     if (n != table_blob::dense_uncompressed_size) {
       delete[] dense;
       delete[] buffer;
@@ -214,9 +213,9 @@ namespace {
     }
     delete[] dense;
 #else
-    const size_t n = inflate_table_blob(table_blob::compressed,
-                                        table_blob::compressed_size, buffer,
-                                        table_blob::uncompressed_size);
+    const size_t n =
+        inflate_table_blob(table_blob::compressed, table_blob::compressed_size,
+                           buffer, table_blob::uncompressed_size);
     if (n != table_blob::uncompressed_size) {
       delete[] buffer;
       tables_init_state.store(kTablesFailed, std::memory_order_release);

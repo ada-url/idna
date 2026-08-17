@@ -319,11 +319,12 @@ ADA_IDNA_REALLY_INLINE size_t utf32_length_from_utf8(const char* buf,
     count += static_cast<size_t>(popcount_u32(mask));
   }
 #elif defined(ADA_IDNA_NEON)
+  // vcgtq_s8 already returns uint8x16_t (ACLE). Do not vreinterpret.
   const int8x16_t thresh = vdupq_n_s8(static_cast<int8_t>(-65));
   const uint8x16_t one = vdupq_n_u8(1);
   for (; i + 16 <= len; i += 16) {
-    count += static_cast<size_t>(vaddvq_u8(
-        vandq_u8(vreinterpretq_u8_s8(vcgtq_s8(vld1q_s8(p + i), thresh)), one)));
+    const uint8x16_t gt = vcgtq_s8(vld1q_s8(p + i), thresh);
+    count += static_cast<size_t>(vaddvq_u8(vandq_u8(gt, one)));
   }
 #endif
   for (; i < len; ++i) {

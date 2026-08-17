@@ -28,8 +28,10 @@ std::string to_ascii(std::string_view ut8_string);
 // https://url.spec.whatwg.org/#forbidden-domain-code-point
 bool contains_forbidden_domain_code_point(std::string_view ascii_string);
 
-bool constexpr is_ascii(std::u32string_view view);
-bool constexpr is_ascii(std::string_view view);
+// Runtime SIMD (SSE2/NEON) with a SWAR fallback. Not constexpr: vector
+// paths cannot be evaluated at compile time.
+bool is_ascii(std::u32string_view view) noexcept;
+bool is_ascii(std::string_view view) noexcept;
 
 }  // namespace ada::idna
 

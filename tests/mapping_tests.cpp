@@ -254,6 +254,30 @@ TEST(mapping_tests, string_multi_cp_mappings_in_context) {
 
 TEST(mapping_tests, empty_string) { EXPECT_EQ(ada::idna::map(U""), U""); }
 
+TEST(mapping_tests, ascii_map_simd_widths) {
+  auto lower = [](std::string s) {
+    ada::idna::ascii_map(s.data(), s.size());
+    return s;
+  };
+  EXPECT_EQ(lower(""), "");
+  EXPECT_EQ(lower("A"), "a");
+  EXPECT_EQ(lower("Z"), "z");
+  EXPECT_EQ(lower("a"), "a");
+  EXPECT_EQ(lower("0123-._~"), "0123-._~");
+  EXPECT_EQ(lower("ABCDEFg"), "abcdefg");                      // 7
+  EXPECT_EQ(lower("ABCDEFGH"), "abcdefgh");                    // 8
+  EXPECT_EQ(lower("ABCDEFGHIJKLMNO"), "abcdefghijklmno");      // 15
+  EXPECT_EQ(lower("ABCDEFGHIJKLMNOP"), "abcdefghijklmnop");    // 16
+  EXPECT_EQ(lower("ABCDEFGHIJKLMNOPQ"), "abcdefghijklmnopq");  // 17
+  EXPECT_EQ(lower(std::string(32, 'A')), std::string(32, 'a'));
+  EXPECT_EQ(lower(std::string(33, 'Z')), std::string(33, 'z'));
+  EXPECT_EQ(lower("Example.COM"), "example.com");
+  // Unaligned destination (offset 1 inside a larger buffer).
+  std::string padded = std::string(1, '!') + std::string(20, 'B');
+  ada::idna::ascii_map(padded.data() + 1, 20);
+  EXPECT_EQ(padded, std::string(1, '!') + std::string(20, 'b'));
+}
+
 // ── CJK compatibility ideographs in the mapping range ─────────────────────
 // These are in the high area of the two-level table (0x2F800 range).
 TEST(mapping_tests, cjk_compatibility_ideographs) {

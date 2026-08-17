@@ -1,7 +1,6 @@
 #include "ada/idna/unicode_transcoding.h"
 
 #include <cstdint>
-#include <cstring>
 
 #include "simd.hpp"
 
@@ -12,20 +11,11 @@ size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
   size_t pos = 0;
   const char32_t* start{utf32_output};
   while (pos < len) {
-    // Convert the next block of 16 ASCII bytes with a SIMD widen.
-    if (pos + 16 <= len) {  // if it is safe to read 16 more
-                            // bytes, check that they are ascii
-      uint64_t v1;
-      std::memcpy(&v1, data + pos, sizeof(uint64_t));
-      uint64_t v2;
-      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
-      uint64_t v{v1 | v2};
-      if ((v & 0x8080808080808080) == 0) {
-        simd::widen16_ascii_to_utf32(data + pos, utf32_output);
-        utf32_output += 16;
-        pos += 16;
-        continue;
-      }
+    // One load: ASCII check and widen share the same 16-byte register.
+    if (pos + 16 <= len && simd::try_widen16_ascii(data + pos, utf32_output)) {
+      utf32_output += 16;
+      pos += 16;
+      continue;
     }
     uint8_t leading_byte = data[pos];  // leading byte
     if (leading_byte < 0b10000000) {
@@ -118,9 +108,7 @@ size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {
   size_t pos = 0;
   const char* start{utf8_output};
   while (pos < len) {
-    // Convert the next block of 4 ASCII code points with a SIMD pack.
-    if (pos + 4 <= len && simd::is_ascii_32x4(data + pos)) {
-      simd::pack4_ascii_utf32(data + pos, utf8_output);
+    if (pos + 4 <= len && simd::try_pack4_ascii(data + pos, utf8_output)) {
       utf8_output += 4;
       pos += 4;
       continue;

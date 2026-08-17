@@ -82,7 +82,7 @@ static size_t utf8_count_codepoints(const uint8_t* ptr) noexcept {
 
 // --- ASCII fast path ---------------------------------------------------------
 void ascii_map(char* input, size_t length) {
-  simd::ascii_lowercase(input, length);
+  (void)simd::ascii_lowercase_is_ascii(input, length);
 }
 
 // Two-pass map: first validate + exact size, then write once (no growth

@@ -106,6 +106,18 @@ TEST(to_ascii_tests, special_cases) {
       << "Replacement character in domain should result in empty string";
 }
 
+TEST(to_ascii_tests, nfc_reorders_precomposed_starter) {
+  // A precomposed starter followed by a combining mark of lower combining class
+  // is not in NFC: normalization decomposes the starter and reorders the marks.
+  // U+00E1 (a + acute, class 230) then U+0323 (dot below, class 220) normalizes
+  // to U+1EA1 (a + dot below) with the acute floating -> xn--lsa752l.
+  ASSERT_EQ(ada::idna::to_ascii("\xc3\xa1\xcc\xa3"), "xn--lsa752l")
+      << "acute+dot-below should reorder to NFC before punycode";
+  // U+015A (S + acute, class 230) then U+0327 (cedilla, class 202).
+  ASSERT_EQ(ada::idna::to_ascii("\xc5\x9a\xcc\xa7"), "xn--nga05f")
+      << "acute+cedilla should reorder to NFC before punycode";
+}
+
 TEST(to_ascii_tests, comma_test) {
   ASSERT_FALSE(ada::idna::to_ascii("128.0,0.1").empty());
 }

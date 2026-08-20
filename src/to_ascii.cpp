@@ -1,15 +1,13 @@
 #include "ada/idna/to_ascii.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <ranges>
 
 #include "ada/idna/mapping.h"
 #include "ada/idna/normalization.h"
 #include "ada/idna/punycode.h"
 #include "ada/idna/unicode_transcoding.h"
 #include "ada/idna/validity.h"
+#include "simd.hpp"
 
 #ifdef ADA_USE_SIMDUTF
 #include "simdutf.h"
@@ -17,22 +15,12 @@
 
 namespace ada::idna {
 
-bool constexpr is_ascii(std::u32string_view view) {
-  for (uint32_t c : view) {
-    if (c >= 0x80) {
-      return false;
-    }
-  }
-  return true;
+bool is_ascii(std::u32string_view view) noexcept {
+  return simd::is_ascii_32(view.data(), view.size());
 }
 
-bool constexpr is_ascii(std::string_view view) {
-  for (uint8_t c : view) {
-    if (c >= 0x80) {
-      return false;
-    }
-  }
-  return true;
+bool is_ascii(std::string_view view) noexcept {
+  return simd::is_ascii_8(view.data(), view.size());
 }
 
 constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
@@ -50,22 +38,23 @@ constexpr static uint8_t is_forbidden_domain_code_point_table[] = {
 
 static_assert(sizeof(is_forbidden_domain_code_point_table) == 256);
 
-inline bool is_forbidden_domain_code_point(const char c) noexcept {
-  return is_forbidden_domain_code_point_table[uint8_t(c)];
-}
-
 bool contains_forbidden_domain_code_point(std::string_view view) {
-  return std::ranges::any_of(view, is_forbidden_domain_code_point);
-}
-
-// Per the WHATWG URL "domain to ASCII" algorithm, when beStrict is false and
-// the input domain is an ASCII string, the result is the input lowercased,
-// regardless of the outcome of Unicode ToASCII.
-//
-// See https://url.spec.whatwg.org/#concept-domain-to-ascii
-static void from_ascii_to_ascii(std::string_view ut8_string, std::string& out) {
-  out.assign(ut8_string);
-  ascii_map(out.data(), out.size());
+  const auto* p = reinterpret_cast<const uint8_t*>(view.data());
+  const size_t n = view.size();
+  size_t i = 0;
+  uint8_t bits = 0;
+  for (; i + 4 <= n; i += 4) {
+    bits =
+        static_cast<uint8_t>(bits | is_forbidden_domain_code_point_table[p[i]] |
+                             is_forbidden_domain_code_point_table[p[i + 1]] |
+                             is_forbidden_domain_code_point_table[p[i + 2]] |
+                             is_forbidden_domain_code_point_table[p[i + 3]]);
+  }
+  for (; i < n; ++i) {
+    bits =
+        static_cast<uint8_t>(bits | is_forbidden_domain_code_point_table[p[i]]);
+  }
+  return bits != 0;
 }
 
 // Append ASCII code units from a UTF-32 label (all values < 0x80).
@@ -73,8 +62,9 @@ static void append_ascii_label(std::string& out, std::u32string_view label) {
   const size_t old = out.size();
   out.resize(old + label.size());
   char* dest = out.data() + old;
-  for (char32_t c : label) {
-    *dest++ = static_cast<char>(c);
+  const char32_t* src = label.data();
+  for (size_t i = 0; i < label.size(); ++i) {
+    dest[i] = static_cast<char>(src[i]);
   }
 }
 
@@ -85,14 +75,18 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
 }
 
 [[nodiscard]] bool to_ascii(std::string_view ut8_string, std::string& out) {
-  out.clear();
   if (ut8_string.size() > max_domain_input_bytes) {
+    out.clear();
     return false;
   }
-  if (is_ascii(ut8_string)) {
-    from_ascii_to_ascii(ut8_string, out);
+  // WHATWG beStrict=false: ASCII input is just copied and lowercased.
+  // One pass: lowercase in place and test the high bit (no extra is_ascii
+  // scan). See https://url.spec.whatwg.org/#concept-domain-to-ascii
+  out.assign(ut8_string);
+  if (simd::ascii_lowercase_is_ascii(out.data(), out.size())) {
     return true;
   }
+  out.clear();
 
 #ifdef ADA_USE_SIMDUTF
   size_t utf32_length =
@@ -156,11 +150,9 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
     if (label_size == 0) {
       // empty label
     } else if (is_ace_prefix(label_view)) {
-      for (char32_t c : label_view) {
-        if (c >= 0x80) {
-          out.clear();
-          return false;
-        }
+      if (!is_ascii(label_view)) {
+        out.clear();
+        return false;
       }
       append_ascii_label(out, label_view);
       std::string_view puny_segment_ascii(

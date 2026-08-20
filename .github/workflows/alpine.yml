@@ -8,6 +8,9 @@ jobs:
     name: Build on Alpine ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
+      # setup-alpine + qemu can flake on one arch (apk DB under emulation);
+      # do not cancel the others.
+      fail-fast: false
       matrix:
         arch:
           - x86_64
@@ -22,11 +25,15 @@ jobs:
       - name: Install extra dependencies
         run: |
           sudo apt update && sudo apt install -y binfmt-support
-      - name: Install latest Alpine Linux for ${{ matrix.arch }}
+      - name: Install Alpine Linux for ${{ matrix.arch }}
         uses: jirutka/setup-alpine@v1
         with:
           arch: ${{ matrix.arch }}
-          branch: ${{ matrix.arch == 'riscv64' && 'edge' || 'latest-stable' }}
+          # latest-stable is 3.23+ (apk-tools v3). setup-alpine still
+          # bootstraps with a static apk v2.14 binary, so apk add in the
+          # chroot fails with "database: file format is invalid" on some
+          # qemu arches (seen on ppc64le). v3.22 is the last apk v2 release.
+          branch: ${{ matrix.arch == 'riscv64' && 'edge' || 'v3.22' }}
           packages: >
             build-base
             cmake

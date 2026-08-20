@@ -6,6 +6,7 @@
 #include <string>
 
 #include "table_store.hpp"
+#include "simd.hpp"
 #include "mapping_tables.cpp"
 
 namespace ada::idna {
@@ -81,28 +82,7 @@ static size_t utf8_count_codepoints(const uint8_t* ptr) noexcept {
 
 // --- ASCII fast path ---------------------------------------------------------
 void ascii_map(char* input, size_t length) {
-  auto broadcast = [](uint8_t v) -> uint64_t {
-    return 0x101010101010101ull * v;
-  };
-  uint64_t broadcast_80 = broadcast(0x80);
-  uint64_t broadcast_Ap = broadcast(128 - 'A');
-  uint64_t broadcast_Zp = broadcast(128 - 'Z' - 1);
-  size_t i = 0;
-
-  for (; i + 7 < length; i += 8) {
-    uint64_t word{};
-    std::memcpy(&word, input + i, sizeof(word));
-    word ^=
-        (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    std::memcpy(input + i, &word, sizeof(word));
-  }
-  if (i < length) {
-    uint64_t word{};
-    std::memcpy(&word, input + i, length - i);
-    word ^=
-        (((word + broadcast_Ap) ^ (word + broadcast_Zp)) & broadcast_80) >> 2;
-    std::memcpy(input + i, &word, length - i);
-  }
+  (void)simd::ascii_lowercase_is_ascii(input, length);
 }
 
 // Two-pass map: first validate + exact size, then write once (no growth

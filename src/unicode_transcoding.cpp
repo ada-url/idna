@@ -1,8 +1,8 @@
 #include "ada/idna/unicode_transcoding.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
+
+#include "simd.hpp"
 
 namespace ada::idna {
 
@@ -11,22 +11,11 @@ size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
   size_t pos = 0;
   const char32_t* start{utf32_output};
   while (pos < len) {
-    // try to convert the next block of 16 ASCII bytes
-    if (pos + 16 <= len) {  // if it is safe to read 16 more
-                            // bytes, check that they are ascii
-      uint64_t v1;
-      std::memcpy(&v1, data + pos, sizeof(uint64_t));
-      uint64_t v2;
-      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
-      uint64_t v{v1 | v2};
-      if ((v & 0x8080808080808080) == 0) {
-        size_t final_pos = pos + 16;
-        while (pos < final_pos) {
-          *utf32_output++ = char32_t(buf[pos]);
-          pos++;
-        }
-        continue;
-      }
+    // One load: ASCII check and widen share the same 16-byte register.
+    if (pos + 16 <= len && simd::try_widen16_ascii(data + pos, utf32_output)) {
+      utf32_output += 16;
+      pos += 16;
+      continue;
     }
     uint8_t leading_byte = data[pos];  // leading byte
     if (leading_byte < 0b10000000) {
@@ -105,24 +94,13 @@ size_t utf8_to_utf32(const char* buf, size_t len, char32_t* utf32_output) {
 
 size_t utf8_length_from_utf32(const char32_t* buf, size_t len) {
   // We are not BOM aware.
-  const uint32_t* p = reinterpret_cast<const uint32_t*>(buf);
-  size_t counter{0};
-  for (size_t i = 0; i != len; ++i) {
-    ++counter;                                      // ASCII
-    counter += static_cast<size_t>(p[i] > 0x7F);    // two-byte
-    counter += static_cast<size_t>(p[i] > 0x7FF);   // three-byte
-    counter += static_cast<size_t>(p[i] > 0xFFFF);  // four-bytes
-  }
-  return counter;
+  return simd::utf8_length_from_utf32(buf, len);
 }
 
 size_t utf32_length_from_utf8(const char* buf, size_t len) {
-  const int8_t* p = reinterpret_cast<const int8_t*>(buf);
-  return std::count_if(p, std::next(p, len), [](int8_t c) {
-    // -65 is 0b10111111, anything larger in two-complement's
-    // should start a new code point.
-    return c > -65;
-  });
+  // -65 is 0b10111111; anything larger in two's complement starts a
+  // new code point (not a UTF-8 continuation byte).
+  return simd::utf32_length_from_utf8(buf, len);
 }
 
 size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {
@@ -130,17 +108,10 @@ size_t utf32_to_utf8(const char32_t* buf, size_t len, char* utf8_output) {
   size_t pos = 0;
   const char* start{utf8_output};
   while (pos < len) {
-    // try to convert the next block of 2 ASCII characters
-    if (pos + 2 <= len) {  // if it is safe to read 8 more
-                           // bytes, check that they are ascii
-      uint64_t v;
-      std::memcpy(&v, data + pos, sizeof(uint64_t));
-      if ((v & 0xFFFFFF80FFFFFF80) == 0) {
-        *utf8_output++ = char(buf[pos]);
-        *utf8_output++ = char(buf[pos + 1]);
-        pos += 2;
-        continue;
-      }
+    if (pos + 4 <= len && simd::try_pack4_ascii(data + pos, utf8_output)) {
+      utf8_output += 4;
+      pos += 4;
+      continue;
     }
     uint32_t word = data[pos];
     if ((word & 0xFFFFFF80) == 0) {

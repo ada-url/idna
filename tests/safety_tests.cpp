@@ -101,3 +101,19 @@ TEST(Safety, IsAlreadyNfc) {
   EXPECT_TRUE(ada::idna::is_already_nfc(precomposed));
   EXPECT_FALSE(ada::idna::is_already_nfc(decomposed));
 }
+
+TEST(Safety, ComposesHangulLvPlusTrailingJamo) {
+  ASSERT_TRUE(ada::idna::ensure_tables());
+  // A precomposed LV syllable (SIndex % TCount == 0) followed by a trailing
+  // jamo composes to the LVT syllable under NFC.
+  //   U+AC00 (가, LV) + U+11A8 (ᆨ, T) -> U+AC01 (각)
+  std::u32string lv_plus_t = {0xAC00, 0x11A8};
+  EXPECT_FALSE(ada::idna::is_already_nfc(lv_plus_t));
+  ASSERT_TRUE(ada::idna::normalize(lv_plus_t));
+  EXPECT_EQ(lv_plus_t, std::u32string({0xAC01}));
+
+  //   U+C4D4 (LV) + U+11B6 (T) -> U+C4E3
+  std::u32string lv_plus_t2 = {0xC4D4, 0x11B6};
+  ASSERT_TRUE(ada::idna::normalize(lv_plus_t2));
+  EXPECT_EQ(lv_plus_t2, std::u32string({0xC4E3}));
+}

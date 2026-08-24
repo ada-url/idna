@@ -168,7 +168,7 @@ static bool would_compose(std::u32string_view input) noexcept {
       continue;
     }
     if (current >= hangul_sbase && current < hangul_sbase + hangul_scount) {
-      if ((current - hangul_sbase) % hangul_tcount &&
+      if ((current - hangul_sbase) % hangul_tcount == 0 &&
           input_count + 1 < input.size() &&
           input[input_count + 1] > hangul_tbase &&
           input[input_count + 1] < hangul_tbase + hangul_tcount) {
@@ -292,7 +292,7 @@ void compose(std::u32string& input) {
       }
     } else if (input[input_count] >= hangul_sbase &&
                input[input_count] < hangul_sbase + hangul_scount) {
-      if ((input[input_count] - hangul_sbase) % hangul_tcount &&
+      if ((input[input_count] - hangul_sbase) % hangul_tcount == 0 &&
           input_count + 1 < input.size() &&
           input[input_count + 1] > hangul_tbase &&
           input[input_count + 1] < hangul_tbase + hangul_tcount) {

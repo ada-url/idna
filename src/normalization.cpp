@@ -235,6 +235,43 @@ static uint8_t trailing_ccc(char32_t c) noexcept {
   return get_ccc(decomposition_data[base + length - 1]);
 }
 
+void compose(std::u32string& input);
+
+// A character that has a canonical decomposition is in NFC form only if that
+// decomposition composes back to exactly it. Singletons never do (e.g. U+212B
+// ANGSTROM SIGN). Composition exclusions do not either: their decomposition
+// composes to a different primary composite (e.g. U+1F71 -> U+03B1 U+0301 ->
+// U+03AC) or does not compose at all (e.g. U+0958 DEVANAGARI LETTER QA ->
+// U+0915 U+093C), and non-starter decompositions such as U+0344 -> U+0308
+// U+0301 stay decomposed. All are NFC_Quick_Check=No and must be normalized.
+static bool decomposition_is_not_nfc(char32_t c) noexcept {
+  if (c >= hangul_sbase && c < hangul_sbase + hangul_scount) {
+    return false;
+  }
+  if (c >= 0x110000) {
+    return false;
+  }
+  const uint16_t* const decomposition =
+      decomposition_block_row(decomposition_index[c >> 8]) + (c % 256);
+  const size_t length = (decomposition[1] >> 2) - (decomposition[0] >> 2);
+  if (length == 0 || (decomposition[0] & 1)) {
+    return false;  // no canonical decomposition (or compatibility-only)
+  }
+  if (length == 1) {
+    return true;  // singleton
+  }
+  const size_t base = decomposition[0] >> 2;
+  if (base + length > decomposition_data_size) {
+    return false;
+  }
+  // Recompose the canonical decomposition; if it does not collapse back to c,
+  // then c is an exclusion / non-starter decomposition and is not NFC.
+  std::u32string decomposed(decomposition_data + base,
+                            decomposition_data + base + length);
+  compose(decomposed);
+  return !(decomposed.size() == 1 && decomposed[0] == c);
+}
+
 bool is_already_nfc(std::u32string_view input) noexcept {
   if (input.empty()) {
     return true;
@@ -242,10 +279,11 @@ bool is_already_nfc(std::u32string_view input) noexcept {
   if (!tables_are_ready() && !ensure_tables()) {
     return false;
   }
-  // 1) Singleton decompositions are never NFC (e.g. U+212B ANGSTROM SIGN).
-  //    Multi-code-point decomps are primary composites that are NFC as-is.
+  // 1) A character whose canonical decomposition does not compose back to it is
+  //    not NFC: singletons (e.g. U+212B), composition exclusions (e.g. U+0958)
+  //    and non-starter decompositions (e.g. U+0344).
   for (char32_t c : input) {
-    if (canonical_decomp_length(c) == 1) {
+    if (decomposition_is_not_nfc(c)) {
       return false;
     }
   }

@@ -36,6 +36,7 @@ else:
 
 AMALGAMATE_UNILIB_SOURCE_PATH = AMALGAMATE_SOURCE_PATH +"/unilib"
 # this list excludes the "src/generic headers"
+# idna.cpp umbrella includes idna_hot + idna_cold (aux + tables_init).
 ALLCFILES = ["idna.cpp"]
 
 # order matters

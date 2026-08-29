@@ -1,8 +1,4 @@
-#include "unicode_transcoding.cpp"
-#include "mapping.cpp"
-#include "normalization.cpp"
-#include "punycode.cpp"
-#include "validity.cpp"
-#include "to_ascii.cpp"
-#include "to_unicode.cpp"
-#include "identifier.cpp"
+// Umbrella TU kept for amalgamation / INTERFACE consumers that expect idna.cpp.
+// The static library builds idna_hot.cpp + idna_cold.cpp instead.
+#include "idna_cold.cpp"
+#include "idna_hot.cpp"

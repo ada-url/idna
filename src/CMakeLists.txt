@@ -4,16 +4,103 @@ message(STATUS "CMAKE_BUILD_TYPE : " ${CMAKE_BUILD_TYPE})
 add_library(ada-idna-include-source INTERFACE)
 target_include_directories(ada-idna-include-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 add_library(ada-idna-source INTERFACE)
-target_sources(ada-idna-source INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna.cpp)
+target_sources(ada-idna-source INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna_hot.cpp
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/idna_cold.cpp)
 target_link_libraries(ada-idna-source INTERFACE ada-include-source)
-add_library(ada-idna idna.cpp)
-target_compile_features(ada-idna PUBLIC cxx_std_20)
-target_include_directories(ada-idna PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> )
-target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+
+# Split hot (-O3) vs cold (-Os) translation units. On Unix we optionally merge
+# the objects with ld -r into one archive member for a smaller .a; MSVC just
+# archives both objects (no POSIX ld -r).
+add_library(ada-idna-hot OBJECT idna_hot.cpp)
+add_library(ada-idna-cold OBJECT idna_cold.cpp)
+foreach(t ada-idna-hot ada-idna-cold)
+  target_compile_features(${t} PUBLIC cxx_std_20)
+  target_include_directories(${t} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+  target_include_directories(${t} PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+endforeach()
+
+find_package(ZLIB)
+if(ZLIB_FOUND)
+  target_link_libraries(ada-idna-cold PRIVATE ZLIB::ZLIB)
+  target_compile_definitions(ada-idna-cold PRIVATE ADA_IDNA_USE_SYSTEM_ZLIB=1)
+  # INTERFACE source consumers compile idna_cold.cpp themselves.
+  target_link_libraries(ada-idna-source INTERFACE ZLIB::ZLIB)
+  target_compile_definitions(ada-idna-source INTERFACE ADA_IDNA_USE_SYSTEM_ZLIB=1)
+  set(ADA_IDNA_NEEDS_ZLIB TRUE)
+else()
+  message(STATUS "zlib not found; using in-tree raw DEFLATE inflater")
+  set(ADA_IDNA_NEEDS_ZLIB FALSE)
+endif()
+
+if(NOT MSVC)
+  target_compile_options(ada-idna-hot PRIVATE -O3 -fno-exceptions -fno-rtti)
+  target_compile_options(ada-idna-cold PRIVATE -Os -fno-exceptions -fno-rtti)
+endif()
 
 if(ADA_USE_SIMDUTF)
-  target_link_libraries(ada-idna PRIVATE simdutf)
-  target_compile_definitions(ada-idna PRIVATE ADA_USE_SIMDUTF)
+  # OBJECT libs must link simdutf for include paths at compile time.
+  target_link_libraries(ada-idna-hot PRIVATE simdutf)
+  target_link_libraries(ada-idna-cold PRIVATE simdutf)
+  target_compile_definitions(ada-idna-hot PRIVATE ADA_USE_SIMDUTF)
+  target_compile_definitions(ada-idna-cold PRIVATE ADA_USE_SIMDUTF)
+endif()
+
+# Prefer a single archive member on Unix (smaller .a). Fall back to a normal
+# multi-object static lib on MSVC or if the merge tools are unavailable.
+set(ADA_IDNA_CAN_MERGE FALSE)
+if(NOT MSVC AND NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
+  find_program(ADA_IDNA_LD NAMES ld ${CMAKE_LINKER})
+  find_program(ADA_IDNA_STRIP NAMES strip ${CMAKE_STRIP})
+  if(ADA_IDNA_LD)
+    set(ADA_IDNA_CAN_MERGE TRUE)
+  endif()
+endif()
+
+if(ADA_IDNA_CAN_MERGE)
+  set(ADA_IDNA_MERGED_OBJ
+      "${CMAKE_CURRENT_BINARY_DIR}/ada_idna_merged${CMAKE_CXX_OUTPUT_EXTENSION}")
+  # Use a small shell script so strip failure is non-fatal (musl/busybox strip
+  # variants differ) and so we can fall back cleanly.
+  set(ADA_IDNA_MERGE_SH "${CMAKE_CURRENT_BINARY_DIR}/merge_ada_idna.sh")
+  file(WRITE "${ADA_IDNA_MERGE_SH}" "#!/bin/sh
+set -e
+out=\"\$1\"
+shift
+\"${ADA_IDNA_LD}\" -r -o \"\$out\" \"\$@\"
+if [ -n \"${ADA_IDNA_STRIP}\" ] && command -v \"${ADA_IDNA_STRIP}\" >/dev/null 2>&1; then
+  \"${ADA_IDNA_STRIP}\" -x \"\$out\" 2>/dev/null || true
+fi
+")
+  add_custom_command(
+    OUTPUT "${ADA_IDNA_MERGED_OBJ}"
+    COMMAND /bin/sh "${ADA_IDNA_MERGE_SH}" "${ADA_IDNA_MERGED_OBJ}"
+            $<TARGET_OBJECTS:ada-idna-hot>
+            $<TARGET_OBJECTS:ada-idna-cold>
+    DEPENDS ada-idna-hot ada-idna-cold
+    COMMENT "Merging ada-idna hot+cold objects into one archive member"
+    VERBATIM
+    COMMAND_EXPAND_LISTS
+  )
+  add_custom_target(ada-idna-merged DEPENDS "${ADA_IDNA_MERGED_OBJ}")
+  add_library(ada-idna STATIC "${ADA_IDNA_MERGED_OBJ}")
+  set_target_properties(ada-idna PROPERTIES LINKER_LANGUAGE CXX)
+  add_dependencies(ada-idna ada-idna-merged)
+else()
+  add_library(ada-idna STATIC
+    $<TARGET_OBJECTS:ada-idna-hot>
+    $<TARGET_OBJECTS:ada-idna-cold>)
+  add_dependencies(ada-idna ada-idna-hot ada-idna-cold)
+endif()
+
+target_include_directories(ada-idna PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+target_compile_features(ada-idna PUBLIC cxx_std_20)
+if(ADA_IDNA_NEEDS_ZLIB)
+  target_link_libraries(ada-idna PUBLIC ZLIB::ZLIB)
+endif()
+if(ADA_USE_SIMDUTF)
+  target_link_libraries(ada-idna PUBLIC simdutf)
+  target_compile_definitions(ada-idna PUBLIC ADA_USE_SIMDUTF)
 endif()
 
 if(MSVC)
@@ -21,29 +108,31 @@ if(MSVC)
     target_compile_options(ada INTERFACE /W0 /sdl)
     set(ADA_LEGACY_VISUAL_STUDIO TRUE)
   else()
-    target_compile_options(ada-idna INTERFACE /WX /W3 /sdl /w34714) # https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-level-4-c4714?view=vs-2019
+    target_compile_options(ada-idna INTERFACE /WX /W3 /sdl /w34714)
   endif()
 else(MSVC)
   if(NOT WIN32)
     target_compile_options(ada-idna INTERFACE -fPIC)
+    target_compile_options(ada-idna-hot PRIVATE -fPIC)
+    target_compile_options(ada-idna-cold PRIVATE -fPIC)
   endif()
   message(STATUS "Assuming GCC-like compiler.")
-  target_compile_options(ada-idna PRIVATE -Wall -Wextra -Weffc++)
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(ada-idna PRIVATE -Wsuggest-override)
-    # Catch dead locals such as the former Huff::build fill[] array that
-    # failed ada's pedantic g++-12 job (-Werror=unused-but-set-variable).
-    target_compile_options(ada-idna PRIVATE -Werror=unused-but-set-variable)
-  endif()
-  if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
-    target_compile_options(ada-idna PRIVATE -Winconsistent-missing-override)
-  endif()
-  target_compile_options(ada-idna PRIVATE -Wfatal-errors -Wsign-compare -Wshadow -Wwrite-strings -Wpointer-arith -Winit-self -Wconversion -Wno-sign-conversion)
+  foreach(t ada-idna-hot ada-idna-cold)
+    target_compile_options(${t} PRIVATE -Wall -Wextra -Weffc++)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      target_compile_options(${t} PRIVATE -Wsuggest-override -Werror=unused-but-set-variable)
+    endif()
+    if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
+      target_compile_options(${t} PRIVATE -Winconsistent-missing-override)
+    endif()
+    target_compile_options(${t} PRIVATE -Wfatal-errors -Wsign-compare -Wshadow -Wwrite-strings -Wpointer-arith -Winit-self -Wconversion -Wno-sign-conversion)
+  endforeach()
 endif(MSVC)
 
 # workaround for GNU GCC poor AVX load/store code generation
 if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86(_64)?)$"))
-  target_compile_options(ada-idna PRIVATE -mno-avx256-split-unaligned-load -mno-avx256-split-unaligned-store)
+  target_compile_options(ada-idna-hot PRIVATE -mno-avx256-split-unaligned-load -mno-avx256-split-unaligned-store)
+  target_compile_options(ada-idna-cold PRIVATE -mno-avx256-split-unaligned-load -mno-avx256-split-unaligned-store)
 endif()
 
 if(ADA_SANITIZE)
@@ -61,5 +150,6 @@ if(ADA_SANITIZE_UNDEFINED)
 endif()
 
 if(BUILD_TESTING)
-  target_compile_definitions(ada-idna PRIVATE ADA_TESTING=1)
+  target_compile_definitions(ada-idna-hot PRIVATE ADA_TESTING=1)
+  target_compile_definitions(ada-idna-cold PRIVATE ADA_TESTING=1)
 endif()

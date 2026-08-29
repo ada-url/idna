@@ -1,15 +1,15 @@
 // Runtime store for compressed Unicode/IDNA tables.
-// Large tables are DEFLATE-compressed (read-only) and expanded once on first
-// use into a heap buffer so the working set does not bloat the on-disk binary.
-// Hot-path lookups use the same O(1) multi-stage layout as the pre-compression
-// code; compression only affects on-disk size and one-time init.
+// Large tables are prefiltered (delta + byte-plane split) then raw-DEFLATE
+// compressed (read-only) and expanded once on first use into a heap buffer so
+// the working set does not bloat the on-disk binary. Hot-path lookups use the
+// same O(1) multi-stage layout as the pre-compression code; compression only
+// affects on-disk size and one-time init.
 //
 // Thread-safe without mutex: atomic CAS + spin-wait. ensure_tables() returns
 // false if initialization fails (OOM, corrupt blob); callers must treat that
 // as a hard error and not touch table pointers.
 #pragma once
 
-#include "raw_inflate.hpp"
 #include "table_blob.inc"
 
 #include <atomic>
@@ -74,8 +74,8 @@ inline void bswap_inplace(T* data, size_t count) noexcept {
   }
 }
 
-// Convert every multi-byte section of the inflated little-endian blob to host
-// order. Single-byte sections are left unchanged. Safe no-op on little-endian.
+// Host-endian conversion and unfilter live in tables_init.cpp (cold TU).
+// Declared here for tests that exercise bswap helpers directly.
 inline void convert_table_blob_to_host_endian(uint8_t* buffer) noexcept {
   if constexpr (std::endian::native == std::endian::little) {
     (void)buffer;
@@ -105,6 +105,9 @@ inline void convert_table_blob_to_host_endian(uint8_t* buffer) noexcept {
   u32(table_blob::off_dir_final, table_blob::count_dir_final);
   u32(table_blob::off_combining_flat, table_blob::count_combining_flat);
 }
+
+// Unfilter is implemented in tables_init.cpp (cold -Os TU).
+[[nodiscard]] bool unfilter_table_blob(uint8_t* buffer) noexcept;
 
 }  // namespace detail
 
@@ -141,7 +144,6 @@ static_assert(table_blob::off_id_start_flat % alignof(uint32_t) == 0);
 static_assert(table_blob::off_dir_start % alignof(uint32_t) == 0);
 static_assert(table_blob::off_dir_final % alignof(uint32_t) == 0);
 static_assert(table_blob::off_combining_flat % alignof(uint32_t) == 0);
-static_assert(table_blob::compressed_size == sizeof(table_blob::compressed));
 
 // Every section must lie entirely inside the uncompressed buffer.
 #define ADA_IDNA_SECTION_IN_BOUNDS(off, count, width)                       \
@@ -251,125 +253,13 @@ inline uint8_t* tables_buffer = nullptr;
 // Cap spin-wait so a stuck peer cannot hang the process forever.
 inline constexpr uint64_t kTablesSpinLimit = 1'000'000'000ull;
 
-// ISO HDLC / zlib CRC-32 of the uncompressed table payload.
-[[nodiscard]] inline uint32_t crc32_ieee(const uint8_t* data,
-                                         size_t len) noexcept {
-  uint32_t c = 0xFFFFFFFFu;
-  for (size_t i = 0; i < len; ++i) {
-    c ^= data[i];
-    for (int k = 0; k < 8; ++k) {
-      const uint32_t mask = 0u - (c & 1u);
-      c = (c >> 1) ^ (0xEDB88320u & mask);
-    }
-  }
-  return ~c;
-}
-
 [[nodiscard]] inline bool tables_are_ready() noexcept {
   return tables_init_state.load(std::memory_order_acquire) == kTablesReady;
 }
 
+// Defined in tables_init.cpp (cold -Os TU: inflate + blob + unfilter).
 // Returns true only when all table pointers are safe to use.
-[[nodiscard]] inline bool ensure_tables() noexcept {
-  uint8_t state = tables_init_state.load(std::memory_order_acquire);
-  if (state == kTablesReady) {
-    return true;
-  }
-  if (state == kTablesFailed) {
-    return false;
-  }
-
-  uint8_t expected = kTablesUninit;
-  if (tables_init_state.compare_exchange_strong(expected, kTablesInProgress,
-                                                std::memory_order_acq_rel,
-                                                std::memory_order_acquire)) {
-    uint8_t* buffer = new (std::nothrow) uint8_t[table_blob::uncompressed_size];
-    if (buffer == nullptr) {
-      tables_init_state.store(kTablesFailed, std::memory_order_release);
-      return false;
-    }
-
-    const size_t n = deflate::inflate_raw(table_blob::compressed,
-                                          table_blob::compressed_size, buffer,
-                                          table_blob::uncompressed_size);
-    if (n != table_blob::uncompressed_size ||
-        crc32_ieee(buffer, n) != table_blob::uncompressed_crc32) {
-      delete[] buffer;
-      tables_init_state.store(kTablesFailed, std::memory_order_release);
-      return false;
-    }
-
-    // LE payload verified; convert multi-byte fields for big-endian hosts.
-    detail::convert_table_blob_to_host_endian(buffer);
-
-    auto at = [&](size_t off) noexcept -> const uint8_t* {
-      return buffer + off;
-    };
-
-    // Publish all non-atomic pointers before READY. Waiters synchronize via
-    // acquire on tables_init_state and then observe these writes.
-    idna_stage1 =
-        reinterpret_cast<const uint16_t*>(at(table_blob::off_idna_stage1));
-    idna_stage2 =
-        reinterpret_cast<const uint16_t*>(at(table_blob::off_idna_stage2));
-    idna_bool_blocks =
-        reinterpret_cast<const uint64_t*>(at(table_blob::off_idna_bool_blocks));
-    idna_utf8_mappings = at(table_blob::off_idna_utf8_mappings);
-
-    decomposition_index = at(table_blob::off_decomposition_index);
-    decomposition_block_flat = reinterpret_cast<const uint16_t*>(
-        at(table_blob::off_decomposition_block));
-    decomposition_data = reinterpret_cast<const char32_t*>(
-        at(table_blob::off_decomposition_data));
-    ccc_index = at(table_blob::off_ccc_index);
-    ccc_block_flat = at(table_blob::off_ccc_block);
-    composition_index = at(table_blob::off_composition_index);
-    composition_block_flat = reinterpret_cast<const uint16_t*>(
-        at(table_blob::off_composition_block));
-    composition_data =
-        reinterpret_cast<const char32_t*>(at(table_blob::off_composition_data));
-
-    id_continue =
-        reinterpret_cast<range_pair_ptr>(at(table_blob::off_id_continue_flat));
-    id_start =
-        reinterpret_cast<range_pair_ptr>(at(table_blob::off_id_start_flat));
-
-    dir_start =
-        reinterpret_cast<const uint32_t*>(at(table_blob::off_dir_start));
-    dir_final =
-        reinterpret_cast<const uint32_t*>(at(table_blob::off_dir_final));
-    dir_value = at(table_blob::off_dir_value);
-    combining_ranges =
-        reinterpret_cast<range_pair_ptr>(at(table_blob::off_combining_flat));
-
-    tables_buffer = buffer;
-    tables_init_state.store(kTablesReady, std::memory_order_release);
-    return true;
-  }
-
-  // Another thread owns init (or finished between our loads).
-  for (uint64_t spins = 0; spins < kTablesSpinLimit; ++spins) {
-    state = tables_init_state.load(std::memory_order_acquire);
-    if (state == kTablesReady) {
-      return true;
-    }
-    if (state == kTablesFailed) {
-      return false;
-    }
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
-    defined(_M_IX86)
-#if defined(__GNUC__) || defined(__clang__)
-    __builtin_ia32_pause();
-#endif
-#elif defined(__aarch64__) || defined(_M_ARM64)
-#if defined(__GNUC__) || defined(__clang__)
-    asm volatile("yield" ::: "memory");
-#endif
-#endif
-  }
-  // Timed out waiting for a peer - treat as failure rather than hang.
-  return false;
-}
+[[nodiscard]] bool ensure_tables() noexcept;
 
 // O(1) multi-stage accessors. Block indices from the tables are uint8_t and
 // theoretically can be out of range if the blob is corrupt; clamp to a valid

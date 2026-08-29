@@ -99,8 +99,9 @@ struct Huff {
   }
 };
 
-// Fixed Huffman tables are built once at dynamic initialization (before main /
-// single-threaded), so concurrent first-use of inflate cannot race.
+// Fixed Huffman is built on the stack only when a type-1 block appears so we
+// do not keep ~2 KiB of process-lifetime Huff tables in __DATA (zopfli pack
+// streams use dynamic blocks exclusively).
 inline Huff make_fixed_litlen_huff() {
   Huff h;
   uint8_t lens[288];
@@ -120,15 +121,6 @@ inline Huff make_fixed_dist_huff() {
   h.build(lens, 32);
   return h;
 }
-
-// NOLINTNEXTLINE(cert-err58-cpp) -- intentional process-lifetime tables
-inline const Huff kFixedLitLenHuff = make_fixed_litlen_huff();
-// NOLINTNEXTLINE(cert-err58-cpp)
-inline const Huff kFixedDistHuff = make_fixed_dist_huff();
-
-inline int fixed_litlen(BitReader& br) { return kFixedLitLenHuff.decode(br); }
-
-inline int fixed_dist(BitReader& br) { return kFixedDistHuff.decode(br); }
 
 // length and distance base tables
 static const uint16_t len_base[29] = {
@@ -177,7 +169,8 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len, uint8_t* dst,
     } else if (btype == 1 || btype == 2) {
       Huff lit, dist;
       if (btype == 1) {
-        // use fixed via functions
+        lit = make_fixed_litlen_huff();
+        dist = make_fixed_dist_huff();
       } else {
         // dynamic
         uint32_t hlit = br.get(5);
@@ -230,11 +223,7 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len, uint8_t* dst,
         if (!dist.build(lens + hlit, int(hdist))) return 0;
       }
       for (;;) {
-        int sym;
-        if (btype == 1)
-          sym = fixed_litlen(br);
-        else
-          sym = lit.decode(br);
+        const int sym = lit.decode(br);
         if (sym < 0) return 0;
         if (sym < 256) {
           if (out >= dst_cap) return 0;
@@ -248,11 +237,7 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len, uint8_t* dst,
           if (len_extra[len_code] && extra == UINT32_MAX) return 0;
           uint32_t length =
               len_base[len_code] + (len_extra[len_code] ? extra : 0);
-          int dsym;
-          if (btype == 1)
-            dsym = fixed_dist(br);
-          else
-            dsym = dist.decode(br);
+          const int dsym = dist.decode(br);
           if (dsym < 0 || dsym > 29) return 0;
           uint32_t dextra = br.get(dist_extra[dsym]);
           if (dist_extra[dsym] && dextra == UINT32_MAX) return 0;

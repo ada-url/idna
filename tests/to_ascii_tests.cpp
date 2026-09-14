@@ -191,6 +191,25 @@ TEST(to_ascii_tests, bidi_regression) {
       << "multi-label should fail";
 }
 
+TEST(to_ascii_tests, bidi_domain_rule_applies_to_every_label) {
+  // RFC 5893 constrains every label of a domain that has an RTL label, so a
+  // label with no RTL code point of its own can still be invalid there.
+  EXPECT_EQ(ada::idna::to_ascii("\u0627.x1"), "xn--mgb.x1");
+  EXPECT_EQ(ada::idna::to_ascii("a1.\u05D0"), "a1.xn--4db");
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.1x").empty())
+      << "LTR label may not start with EN";
+  EXPECT_TRUE(ada::idna::to_ascii("x.1.\u05D0").empty())
+      << "LTR label may not start with EN";
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.-a").empty())
+      << "LTR label may not start with ES";
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.a-").empty())
+      << "LTR label may not end with ES";
+  EXPECT_TRUE(ada::idna::to_ascii("xn--mgb.1x.\u00E9").empty())
+      << "the RTL label may be an ACE label";
+  EXPECT_EQ(ada::idna::to_ascii("xn--mgb.1x"), "xn--mgb.1x")
+      << "an all-ASCII domain keeps the ASCII carve-out";
+}
+
 // Helper: domain-to-ASCII as URL Standard callers use it (to_ascii + forbidden
 // domain code point filter). Empty string means failure.
 static std::string domain_to_ascii(std::string_view input) {

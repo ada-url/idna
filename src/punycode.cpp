@@ -44,8 +44,13 @@ bool punycode_to_utf32(std::string_view input, std::u32string &out) {
   int32_t i = 0;
   int32_t bias = initial_bias;
   // grab ascii content
+  // RFC 3492 section 6.2: copy the code points before the last delimiter,
+  // then consume the delimiter only "if more than zero code points were
+  // consumed". With a leading delimiter, b == 0, decoding starts at the
+  // delimiter itself, which is not a digit, and fails. This matches the
+  // reference implementation in appendix C (`in = b > 0 ? b + 1 : 0`).
   size_t end_of_ascii = input.find_last_of('-');
-  if (end_of_ascii != std::string_view::npos) {
+  if (end_of_ascii != std::string_view::npos && end_of_ascii > 0) {
     for (uint8_t c : input.substr(0, end_of_ascii)) {
       if (c >= 0x80) {
         return false;

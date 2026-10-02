@@ -111,3 +111,24 @@ TEST_F(PunycodeTest, AlternatingFileTranscoding) {
         << "bad roundtrip utf8 => utf8 transcoding";
   }
 }
+
+TEST(punycode_tests, leading_delimiter_is_invalid) {
+  // RFC 3492 section 6.2 / appendix C: the delimiter is only consumed if at
+  // least one basic code point precedes it. A leading "-" therefore starts
+  // the encoded part, is not a digit, and the input is invalid.
+  std::u32string out;
+  EXPECT_FALSE(ada::idna::punycode_to_utf32("-dddddddd", out));
+  EXPECT_FALSE(ada::idna::punycode_to_utf32("-a", out));
+  EXPECT_FALSE(ada::idna::punycode_to_utf32("-", out));
+  // Without the leading delimiter these are valid.
+  out.clear();
+  EXPECT_TRUE(ada::idna::punycode_to_utf32("dddddddd", out));
+  EXPECT_EQ(out, std::u32string(U"\u0F4C\u0F49\u0F4B\u0F4A\u0F4C\u0F47"));
+  out.clear();
+  EXPECT_TRUE(ada::idna::punycode_to_utf32("a", out));
+  EXPECT_EQ(out, std::u32string(U"\u0080"));
+  // Basic code points, then delimiter, then encoded part.
+  out.clear();
+  EXPECT_TRUE(ada::idna::punycode_to_utf32("-q----jra", out));
+  EXPECT_EQ(out, std::u32string(U"-q--\u00E4-"));
+}

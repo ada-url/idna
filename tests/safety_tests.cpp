@@ -102,6 +102,36 @@ TEST(Safety, IsAlreadyNfc) {
   EXPECT_FALSE(ada::idna::is_already_nfc(decomposed));
 }
 
+TEST(Safety, IsAlreadyNfcCompositionExclusions) {
+  ASSERT_TRUE(ada::idna::ensure_tables());
+  // A canonical decomposition longer than one code point does not make a
+  // character NFC: composition exclusions and non-starter decompositions are
+  // NFC_Quick_Check=No and must normalize.
+  //   U+0958 DEVANAGARI LETTER QA -> U+0915 U+093C (excluded, no recompose)
+  std::u32string qa = {0x0958};
+  EXPECT_FALSE(ada::idna::is_already_nfc(qa));
+  ASSERT_TRUE(ada::idna::normalize(qa));
+  EXPECT_EQ(qa, std::u32string({0x0915, 0x093C}));
+
+  //   U+1F71 GREEK SMALL LETTER ALPHA WITH OXIA -> U+03AC: its decomposition
+  //   recomposes to a different primary composite, so U+1F71 is not NFC.
+  std::u32string oxia = {0x1F71};
+  EXPECT_FALSE(ada::idna::is_already_nfc(oxia));
+  ASSERT_TRUE(ada::idna::normalize(oxia));
+  EXPECT_EQ(oxia, std::u32string({0x03AC}));
+
+  //   U+0344 COMBINING GREEK DIALYTIKA TONOS -> U+0308 U+0301 (non-starter
+  //   decomposition, stays decomposed).
+  std::u32string dialytika = {0x0344};
+  EXPECT_FALSE(ada::idna::is_already_nfc(dialytika));
+  ASSERT_TRUE(ada::idna::normalize(dialytika));
+  EXPECT_EQ(dialytika, std::u32string({0x0308, 0x0301}));
+
+  // Genuine primary composites stay on the already-NFC fast path.
+  EXPECT_TRUE(ada::idna::is_already_nfc(std::u32string({0x00E9})));
+  EXPECT_TRUE(ada::idna::is_already_nfc(std::u32string({0x03AC})));
+}
+
 TEST(Safety, ComposesHangulLvPlusTrailingJamo) {
   ASSERT_TRUE(ada::idna::ensure_tables());
   // A precomposed LV syllable (SIndex % TCount == 0) followed by a trailing

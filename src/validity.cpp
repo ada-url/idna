@@ -189,7 +189,7 @@ bool is_label_valid(const std::u32string_view label) {
     if (c == 0x200c) {
       if (i > 0) {
         if (std::ranges::binary_search(virama, label[i - 1])) {
-          return true;
+          continue;
         }
       }
       if ((i == 0) || (i + 1 >= label.size())) {
@@ -206,14 +206,16 @@ bool is_label_valid(const std::u32string_view label) {
       };
       std::u32string_view before = label.substr(0, i);
       std::u32string_view after = label.substr(i + 1);
-      return (std::find_if(before.begin(), before.end(), is_l_or_d) !=
-              before.end()) &&
-             (std::find_if(after.begin(), after.end(), is_r_or_d) !=
-              after.end());
+      if ((std::find_if(before.begin(), before.end(), is_l_or_d) ==
+           before.end()) ||
+          (std::find_if(after.begin(), after.end(), is_r_or_d) ==
+           after.end())) {
+        return false;
+      }
     } else if (c == 0x200d) {
       if (i > 0) {
         if (std::ranges::binary_search(virama, label[i - 1])) {
-          return true;
+          continue;
         }
       }
       return false;

@@ -191,6 +191,21 @@ TEST(to_ascii_tests, bidi_regression) {
       << "multi-label should fail";
 }
 
+TEST(to_ascii_tests, contextj_joiner_does_not_bypass_bidi) {
+  // A ZWNJ preceded by a virama satisfies the ContextJ rule, but that must not
+  // short-circuit the Bidi validity check for the rest of the label. Here the
+  // label starts with L (U+0915) so it is an LTR label, and the trailing AL
+  // (U+0627) violates Rule 5. It must be rejected.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0915\u094D\u200C\u0627").empty())
+      << "valid ZWNJ must not bypass Bidi rule 5";
+  // Same with ZWJ (U+200D).
+  EXPECT_TRUE(ada::idna::to_ascii("\u0915\u094D\u200D\u0627").empty())
+      << "valid ZWJ must not bypass Bidi rule 5";
+  // A contextually valid joiner in an otherwise valid label still converts.
+  EXPECT_EQ(ada::idna::to_ascii("\u0915\u094D\u200C\u0916"), "xn--11bc8nw90g")
+      << "valid ZWNJ label must still convert";
+}
+
 // Helper: domain-to-ASCII as URL Standard callers use it (to_ascii + forbidden
 // domain code point filter). Empty string means failure.
 static std::string domain_to_ascii(std::string_view input) {

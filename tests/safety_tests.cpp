@@ -7,17 +7,44 @@
 #include "../src/table_store.hpp"
 
 TEST(Safety, RejectsOverlongDomainInput) {
-  std::string huge(ada::idna::max_domain_input_bytes + 1, 'a');
-  huge[huge.size() / 2] = '.';
+  // Non-ASCII input over the limit is rejected by to_ascii.
+  std::string huge;
+  while (huge.size() <= ada::idna::max_domain_input_bytes) {
+    huge += "\xC3\xA0.";  // "\u00E0."
+  }
   EXPECT_TRUE(ada::idna::to_ascii(huge).empty());
 
   std::string out;
   EXPECT_FALSE(ada::idna::to_ascii(huge, out));
   EXPECT_TRUE(out.empty());
 
+  // to_unicode bounds its input regardless (punycode decoding can expand it).
+  std::string huge_ascii(ada::idna::max_domain_input_bytes + 1, 'a');
+  huge_ascii[huge_ascii.size() / 2] = '.';
   std::string uni_out;
-  EXPECT_FALSE(ada::idna::to_unicode(huge, uni_out));
+  EXPECT_FALSE(ada::idna::to_unicode(huge_ascii, uni_out));
   EXPECT_TRUE(uni_out.empty());
+}
+
+TEST(Safety, ToAsciiAcceptsLongAsciiInput) {
+  std::string huge(ada::idna::max_domain_input_bytes + 1, 'A');
+  huge[huge.size() / 2] = '.';
+  std::string out;
+  ASSERT_TRUE(ada::idna::to_ascii(huge, out));
+  EXPECT_EQ(out.size(), huge.size());
+  EXPECT_EQ(out[0], 'a');
+}
+
+TEST(Safety, ToAsciiIdempotentAcrossLimit) {
+  // 2049 x "\u00E0." is 6147 bytes in, 16392 bytes out (over the limit).
+  std::string host;
+  for (int i = 0; i < 2049; i++) host += "\xC3\xA0.";
+  std::string ascii;
+  ASSERT_TRUE(ada::idna::to_ascii(host, ascii));
+  ASSERT_GT(ascii.size(), ada::idna::max_domain_input_bytes);
+  std::string again;
+  ASSERT_TRUE(ada::idna::to_ascii(ascii, again));
+  EXPECT_EQ(again, ascii);
 }
 
 TEST(Safety, RejectsInvalidUtf8) {

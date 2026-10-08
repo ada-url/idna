@@ -86,12 +86,15 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
 
 [[nodiscard]] bool to_ascii(std::string_view ut8_string, std::string& out) {
   out.clear();
-  if (ut8_string.size() > max_domain_input_bytes) {
-    return false;
-  }
+  // The ASCII path is a single same-size copy, so it needs no length bound.
+  // Checking first would reject the (longer) ASCII output of a non-ASCII input
+  // that was accepted, breaking to_ascii(to_ascii(x)) == to_ascii(x).
   if (is_ascii(ut8_string)) {
     from_ascii_to_ascii(ut8_string, out);
     return true;
+  }
+  if (ut8_string.size() > max_domain_input_bytes) {
+    return false;
   }
 
 #ifdef ADA_USE_SIMDUTF

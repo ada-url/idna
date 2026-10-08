@@ -13,8 +13,9 @@ namespace ada::idna {
 // decoding: percent decoding should be done prior to calling this function. We
 // do not remove tabs and spaces, they should have been removed prior to calling
 // this function. We also do not trim control characters. We also assume that
-// the input is not empty. We return "" on error. Inputs longer than
-// max_domain_input_bytes are rejected.
+// the input is not empty. We return "" on error. Non-ASCII inputs longer than
+// max_domain_input_bytes are rejected; ASCII inputs of any length are accepted
+// (they are only lowercased).
 //
 // This function may accept or even produce invalid domains (WHATWG carve-outs).
 std::string to_ascii(std::string_view ut8_string);

@@ -18,16 +18,25 @@ SENTINEL_DISALLOWED = 0xFFFE
 IGNORED_IDX  = 0
 
 # ─── Download / cache IDNA mapping table ─────────────────────────────────────
-url      = "https://www.unicode.org/Public/idna/latest/IdnaMappingTable.txt"
-filename = "IdnaMappingTable.txt"
+# Keep in step with the Unicode version of the other generators
+# (scripts/derived_table.py); Public/idna/latest moves to each new release.
+UNICODE_VERSION = "17.0.0"
+url      = f"https://www.unicode.org/Public/{UNICODE_VERSION}/idna/IdnaMappingTable.txt"
+filename = f"IdnaMappingTable-{UNICODE_VERSION}.txt"
 
 def get_table():
     if not os.path.exists(filename):
         tablefile = requests.get(url)
+        tablefile.raise_for_status()
         with open(filename, 'wb') as f:
             f.write(tablefile.content)
     with open(filename, 'r') as f:
-        return f.read()
+        table_data = f.read()
+    version = get_version(table_data)
+    if version != UNICODE_VERSION:
+        raise SystemExit(f"{filename} is version {version}, expected "
+                         f"{UNICODE_VERSION}; delete it to download again")
+    return table_data
 
 def get_version(table_data):
     return re.search(r"# Version: (.*)", table_data).group(1)

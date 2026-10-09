@@ -256,7 +256,8 @@ def write_mapping_constants(
     text = f"""// IDNA {version}
 // Two-level compressed mapping table (constants only).
 // Array payloads are stored in the DEFLATE blob (see table_store.hpp /
-// scripts/pack_tables.py). Regenerate with: python3 scripts/idna_table.py --write
+// scripts/pack_tables.py).
+// Regenerate with: python3 scripts/idna_table.py --write
 // Logical table size: {total} bytes ({total / 1024:.1f} KB)
 //   stage1:      {len(stage1) * 2:6} bytes  ({len(stage1)} uint16_t entries)
 //   stage2:      {len(mixed_data) * 2:6} bytes  ({len(mixed_data) // block_size} mixed blocks x {block_size})

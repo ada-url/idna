@@ -1,7 +1,8 @@
 // IDNA 18.0.0
 // Two-level compressed mapping table (constants only).
 // Array payloads are stored in the DEFLATE blob (see table_store.hpp /
-// scripts/pack_tables.py). Regenerate with: python3 scripts/idna_table.py --write
+// scripts/pack_tables.py).
+// Regenerate with: python3 scripts/idna_table.py --write
 // Logical table size: 51037 bytes (49.8 KB)
 //   stage1:        8162 bytes  (4081 uint16_t entries)
 //   stage2:       23424 bytes  (183 mixed blocks x 64)

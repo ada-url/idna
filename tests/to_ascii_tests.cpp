@@ -234,6 +234,85 @@ TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
       << "valid ZWNJ label must still convert";
 }
 
+TEST(to_ascii_tests, contextj_viramas_from_newer_unicode) {
+  // Any Canonical_Combining_Class=Virama (9) character allows a following
+  // ZWNJ or ZWJ (RFC 5892 Appendix A). Each label is letter + virama + joiner
+  // + letter.
+  struct virama_case {
+    const char* zwnj_input;
+    const char* zwnj_output;
+    const char* zwj_input;
+    const char* zwj_output;
+  };
+  const virama_case cases[] = {
+      // U+1715 TAGALOG SIGN PAMUDPOD
+      {"\u1703\u1715\u200C\u1703", "xn--xyea7c825c", "\u1703\u1715\u200D\u1703",
+       "xn--xyea7cv35c"},
+      // U+11070 BRAHMI SIGN OLD TAMIL VIRAMA
+      {"\U00011013\U00011070\u200C\U00011013", "xn--0ug4565gba48a",
+       "\U00011013\U00011070\u200D\U00011013", "xn--1ug2565gba48a"},
+      // U+113CE TULU-TIGALARI SIGN VIRAMA
+      {"\U00011392\U000113CE\u200C\U00011392", "xn--0ug0307gba2v",
+       "\U00011392\U000113CE\u200D\U00011392", "xn--1ugy307gba2v"},
+      // U+113CF TULU-TIGALARI SIGN LOOPED VIRAMA
+      {"\U00011392\U000113CF\u200C\U00011392", "xn--0ug0307gba6v",
+       "\U00011392\U000113CF\u200D\U00011392", "xn--1ugy307gba6v"},
+      // U+113D0 TULU-TIGALARI CONJOINER
+      {"\U00011392\U000113D0\u200C\U00011392", "xn--0ug0307gba0w",
+       "\U00011392\U000113D0\u200D\U00011392", "xn--1ugy307gba0w"},
+      // U+11F41 KAWI SIGN KILLER
+      {"\U00011F12\U00011F41\u200C\U00011F12", "xn--0ugz651hba0q",
+       "\U00011F12\U00011F41\u200D\U00011F12", "xn--1ugx651hba0q"},
+      // U+11F42 KAWI CONJOINER
+      {"\U00011F12\U00011F42\u200C\U00011F12", "xn--0ugz651hba4q",
+       "\U00011F12\U00011F42\u200D\U00011F12", "xn--1ugx651hba4q"},
+      // U+1612F GURUNG KHEMA SIGN THOLHOMA
+      {"\U00016101\U0001612F\u200C\U00016101", "xn--0ug9257jba6p",
+       "\U00016101\U0001612F\u200D\U00016101", "xn--1ug7257jba6p"},
+  };
+  for (const virama_case& c : cases) {
+    EXPECT_EQ(ada::idna::to_ascii(c.zwnj_input), c.zwnj_output);
+    EXPECT_EQ(ada::idna::to_ascii(c.zwj_input), c.zwj_output);
+  }
+}
+
+TEST(to_ascii_tests, contextj_joining_types) {
+  // ZWNJ between a Joining_Type L or D character and an R or D character.
+  EXPECT_EQ(ada::idna::to_ascii("\u07CA\u200C\u07CB"), "xn--lsbc047p")
+      << "N'Ko";
+  EXPECT_EQ(ada::idna::to_ascii("\U00010AC0\u200C\U00010AC1"), "xn--0ug8553gea")
+      << "Manichaean";
+  EXPECT_EQ(ada::idna::to_ascii("\U00010D01\u200C\U00010D02"), "xn--0ug5444gea")
+      << "Hanifi Rohingya";
+  EXPECT_EQ(ada::idna::to_ascii("\U00010F30\u200C\U00010F31"), "xn--0ug5035gea")
+      << "Sogdian";
+  EXPECT_EQ(ada::idna::to_ascii("\U00010F70\u200C\U00010F71"), "xn--0ug3045gea")
+      << "Old Uyghur";
+  EXPECT_EQ(ada::idna::to_ascii("\U00010FB0\u200C\U00010FB0"), "xn--0ug1055gba")
+      << "Chorasmian";
+  EXPECT_EQ(ada::idna::to_ascii("\U0001E922\u200C\U0001E923"), "xn--0ug1411pea")
+      << "Adlam";
+  EXPECT_EQ(ada::idna::to_ascii("\u0886\u200C\u0886"), "xn--yxba971p")
+      << "Arabic Extended-B";
+  // U+10ED9 ARABIC CROWN LETTER BEH (Unicode 18) is left-joining: it may come
+  // before a ZWNJ but not after one.
+  EXPECT_EQ(ada::idna::to_ascii("\U00010ED9\u200C\u0628"), "xn--ngb963k752o");
+  EXPECT_TRUE(ada::idna::to_ascii("\u0628\u200C\U00010ED9").empty());
+}
+
+TEST(to_ascii_tests, contextj_transparent_characters) {
+  // Only Joining_Type T characters may come between the ZWNJ and the joining
+  // characters around it: (L|D) T* ZWNJ T* (R|D).
+  EXPECT_EQ(ada::idna::to_ascii("\u0628\u064E\u200C\u0628"), "xn--ngba7iz95i");
+  EXPECT_EQ(ada::idna::to_ascii("\u0628\u200C\u064E\u0628"), "xn--ngba7iy95i");
+  EXPECT_EQ(ada::idna::to_ascii("\u0628\u064E\u0651\u200C\u0628"),
+            "xn--ngba7im9404a");
+  // U+0627 ALEF (R) directly before the ZWNJ.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0628\u0627\u200C\u0628").empty());
+  // U+0621 HAMZA (U) directly after the ZWNJ.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0628\u200C\u0621\u0628").empty());
+}
+
 // Helper: domain-to-ASCII as URL Standard callers use it (to_ascii + forbidden
 // domain code point filter). Empty string means failure.
 static std::string domain_to_ascii(std::string_view input) {

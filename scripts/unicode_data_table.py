@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Generate the normalization and label validity tables from UnicodeData.txt
-and CompositionExclusions.txt, and pack them into src/table_blob.inc.
+"""Generate the normalization and label validity tables from UnicodeData.txt,
+CompositionExclusions.txt and DerivedJoiningType.txt, and pack them into
+src/table_blob.inc.
 
 Use the same Unicode version as the mapping table (scripts/idna_table.py).
 
@@ -37,6 +38,10 @@ Validity (src/validity.cpp).
       Bidi_Class ranges of assigned code points for the RFC 5893 Bidi rule.
       Unassigned code points are rejected by the mapping table first and look
       up as NONE.
+  joining_start/joining_final/joining_value
+      Joining_Type ranges for the RFC 5892 ContextJ rule for U+200C. Code
+      points without a range are U (Non_Joining). The rule's Virama test
+      uses Canonical_Combining_Class 9 from the ccc tables.
 """
 from __future__ import annotations
 
@@ -64,10 +69,13 @@ BIDI_CLASSES = [
     "LRE",
 ]
 
+# Must match `enum class joining_type` in src/validity.cpp (0 is U).
+JOINING_TYPES = ["U", "C", "D", "L", "R", "T"]
+
 
 def get_ucd_file(name: str, version: str = UNICODE_VERSION) -> str:
     """Return a UCD file, downloading it once into the working directory."""
-    stem, ext = os.path.splitext(name)
+    stem, ext = os.path.splitext(os.path.basename(name))
     cached = f"{stem}-{version}{ext}"
     if not os.path.exists(cached):
         url = UCD_URL.format(version=version, name=name)
@@ -134,6 +142,24 @@ def parse_composition_exclusions(text: str) -> set[int]:
         first, _, last = line.partition("..")
         excluded.update(range(int(first, 16), int(last or first, 16) + 1))
     return excluded
+
+
+def parse_joining_types(text: str) -> dict[int, int]:
+    """Map code points to JOINING_TYPES indexes; U is left out."""
+    types: dict[int, int] = {}
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        code_points, _, value = (x.strip() for x in line.partition(";"))
+        if value not in JOINING_TYPES:
+            raise SystemExit(f"unknown Joining_Type value {value}")
+        if value == "U":
+            continue
+        first, _, last = code_points.partition("..")
+        for cp in range(int(first, 16), int(last or first, 16) + 1):
+            types[cp] = JOINING_TYPES.index(value)
+    return types
 
 
 def build_multistage(
@@ -246,7 +272,9 @@ def build_ranges(values: dict[int, int]) -> list[tuple[int, int, int]]:
     return ranges
 
 
-def build_validity(ucd: UnicodeData) -> dict[str, list[int]]:
+def build_validity(
+    ucd: UnicodeData, joining_types: dict[int, int]
+) -> dict[str, list[int]]:
     marks = {
         cp: 1 for cp, gc in ucd.category.items() if gc in COMBINING_CATEGORIES
     }
@@ -257,33 +285,50 @@ def build_validity(ucd: UnicodeData) -> dict[str, list[int]]:
     directions = build_ranges(
         {cp: BIDI_CLASSES.index(bidi) for cp, bidi in ucd.bidi.items()}
     )
+    joining = build_ranges(joining_types)
     return {
         "combining_flat": [cp for r in combining for cp in r[:2]],
         "dir_start": [first for first, _, _ in directions],
         "dir_final": [last for _, last, _ in directions],
         "dir_value": [value for _, _, value in directions],
+        "joining_start": [first for first, _, _ in joining],
+        "joining_final": [last for _, last, _ in joining],
+        "joining_value": [value for _, _, value in joining],
     }
 
 
 def build_sections(
-    unicode_data_text: str, composition_exclusions_text: str
+    unicode_data_text: str,
+    composition_exclusions_text: str,
+    joining_type_text: str,
 ) -> dict[str, list[int]]:
     ucd = UnicodeData(unicode_data_text)
     exclusions = parse_composition_exclusions(composition_exclusions_text)
+    joining_types = parse_joining_types(joining_type_text)
     sections: dict[str, list[int]] = {}
     sections.update(build_decomposition(ucd))
     sections.update(build_ccc(ucd))
     sections.update(build_composition(ucd, exclusions))
-    sections.update(build_validity(ucd))
+    sections.update(build_validity(ucd, joining_types))
     return sections
 
 
-def generate(version: str = UNICODE_VERSION) -> dict[str, list[int]]:
-    exclusions = get_ucd_file("CompositionExclusions.txt", version)
-    m = re.search(r"# CompositionExclusions-(\S+)\.txt", exclusions)
+def get_versioned_ucd_file(name: str, version: str) -> str:
+    """Return a UCD file whose '# Name-version.txt' header matches version."""
+    text = get_ucd_file(name, version)
+    stem = os.path.splitext(os.path.basename(name))[0]
+    m = re.search(rf"# {stem}-(\S+)\.txt", text)
     if not m or m.group(1) != version:
-        raise SystemExit(f"CompositionExclusions.txt is not version {version}")
-    return build_sections(get_ucd_file("UnicodeData.txt", version), exclusions)
+        raise SystemExit(f"{name} is not version {version}")
+    return text
+
+
+def generate(version: str = UNICODE_VERSION) -> dict[str, list[int]]:
+    return build_sections(
+        get_ucd_file("UnicodeData.txt", version),
+        get_versioned_ucd_file("CompositionExclusions.txt", version),
+        get_versioned_ucd_file("extracted/DerivedJoiningType.txt", version),
+    )
 
 
 def update_in_blob(generated: dict[str, list[int]]) -> None:
@@ -314,6 +359,7 @@ def main(argv: list[str]) -> int:
           f"{(len(g['composition_data']) - 1) // 2} pairs")
     print(f"  combining:     {len(g['combining_flat']) // 2} ranges")
     print(f"  directions:    {len(g['dir_start'])} ranges")
+    print(f"  joining types: {len(g['joining_start'])} ranges")
     if argv:
         update_in_blob(generated)
         print("Normalization and validity tables packed into table_blob.inc")

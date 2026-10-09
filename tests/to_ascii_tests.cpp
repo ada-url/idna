@@ -152,6 +152,17 @@ TEST(to_ascii_tests, unicode17_cjk_extension_j) {
       << "Uppercase SS should normalize to lowercase ss";
 }
 
+// Unicode 18 test cases - Small Seal characters (U+3D000..U+3FC3F)
+TEST(to_ascii_tests, unicode18_small_seal) {
+  EXPECT_EQ(ada::idna::to_ascii("\U0003D000"), "xn--d47r");
+  EXPECT_EQ(ada::idna::to_ascii("\U0003FC3F"), "xn--zd7s");
+  // U+3FC40 is unassigned.
+  EXPECT_TRUE(ada::idna::to_ascii("\U0003FC40").empty());
+  // IdnaTestV2.txt 18.0.0: a Small Seal character in a multi-label domain.
+  EXPECT_EQ(ada::idna::to_ascii("\U0003E8AC.\u0729.\uCBD95"),
+            "xn--t92s.xn--znb.xn--5-y88f");
+}
+
 // Regression test for https://github.com/whatwg/url/issues/803
 // A label like U+33FF U+33FD followed by ASCII "xn--" encodes to a punycode
 // payload starting with "xn--", but the decoded form begins with non-ASCII
@@ -442,8 +453,10 @@ TEST(to_ascii_tests, leading_combining_mark_from_newer_unicode) {
   EXPECT_TRUE(ada::idna::to_ascii("\u08CBa").empty()) << "Unicode 14 mark";
   EXPECT_TRUE(ada::idna::to_ascii("\u0897a").empty()) << "Unicode 16 mark";
   EXPECT_TRUE(ada::idna::to_ascii("\u1AE0a").empty()) << "Unicode 17 mark";
+  EXPECT_TRUE(ada::idna::to_ascii("\u1ADEa").empty()) << "Unicode 18 mark";
   // The same mark after a base character is valid.
   EXPECT_EQ(ada::idna::to_ascii("a\u08CB"), "xn--a-mqd");
+  EXPECT_EQ(ada::idna::to_ascii("a\u1ADE"), "xn--a-09k");
 }
 
 TEST(to_ascii_tests, rtl_characters_from_newer_unicode) {
@@ -451,12 +464,29 @@ TEST(to_ascii_tests, rtl_characters_from_newer_unicode) {
   EXPECT_TRUE(ada::idna::to_ascii("\u0870a").empty()) << "Unicode 14 AL";
   EXPECT_TRUE(ada::idna::to_ascii("\U00010D4Aa").empty()) << "Unicode 16 R";
   EXPECT_TRUE(ada::idna::to_ascii("\U00010940a").empty()) << "Unicode 17 R";
-  // An LTR label must not contain an R character.
+  EXPECT_TRUE(ada::idna::to_ascii("\U00010ED9a").empty()) << "Unicode 18 AL";
+  // An LTR label must not contain an R or AL character.
   EXPECT_TRUE(ada::idna::to_ascii("a\U00010940").empty()) << "Unicode 17 R";
+  EXPECT_TRUE(ada::idna::to_ascii("a\U00010ED9").empty()) << "Unicode 18 AL";
   // RTL labels made of these characters are valid.
   EXPECT_EQ(ada::idna::to_ascii("\u0870\u0871"), "xn--cxbc");
   EXPECT_EQ(ada::idna::to_ascii("\U00010D4A\U00010D4B"), "xn--9f0dc");
   EXPECT_EQ(ada::idna::to_ascii("\U00010940\U00010941"), "xn--ql9cc");
+  EXPECT_EQ(ada::idna::to_ascii("\U00010ED9\U00010EDA"), "xn--or0dc");
+}
+
+TEST(to_ascii_tests, bidi_class_changes_in_unicode18) {
+  // Unicode 18 changes U+1B3A BALINESE VOWEL SIGN RA REPA from NSM to L, so it
+  // may no longer follow an R character in an RTL label.
+  EXPECT_TRUE(ada::idna::to_ascii("\u05D0\u1B3A").empty());
+  EXPECT_EQ(ada::idna::to_ascii("\u1B13\u1B3A"), "xn--ntf8e");
+}
+
+TEST(to_ascii_tests, unicode18_canonical_ordering) {
+  // U+05C8 (ccc 10) and U+05C9 (ccc 21) are new Hebrew points; NFC sorts them
+  // by combining class.
+  EXPECT_EQ(ada::idna::to_ascii("\u05D0\u05C8\u05C9"), "xn--wdbct");
+  EXPECT_EQ(ada::idna::to_ascii("\u05D0\u05C9\u05C8"), "xn--wdbct");
 }
 
 TEST(to_ascii_tests, unicode16_canonical_composition) {

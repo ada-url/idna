@@ -50,15 +50,23 @@ def cpp_arrayarray_initializer(arr):
     return alllines
 
 
-urlderived = "https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt"
-derivedfilename = "DerivedCoreProperties.txt"
+# Keep in step with UNICODE_VERSION in scripts/idna_table.py.
+UNICODE_VERSION = "18.0.0"
+urlderived = f"https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/DerivedCoreProperties.txt"
+derivedfilename = f"DerivedCoreProperties-{UNICODE_VERSION}.txt"
 def get_derived_table():
     if(not os.path.exists(derivedfilename)):
         tablefile = requests.get(urlderived)
+        tablefile.raise_for_status()
         with open(derivedfilename,  'wb') as file:
             file.write(tablefile.content)
     with open(derivedfilename, 'r') as file:
-       return file.read()
+        table_data = file.read()
+    version = get_version(table_data)
+    if version != UNICODE_VERSION:
+        raise SystemExit(f"{derivedfilename} is version {version}, expected "
+                         f"{UNICODE_VERSION}; delete it to download again")
+    return table_data
 
 def get_version(table_data):
     return re.search(r"# DerivedCoreProperties-(.*)\.txt", table_data).group(1)

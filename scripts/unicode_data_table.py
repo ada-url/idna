@@ -46,7 +46,7 @@ import sys
 import urllib.request
 from collections import defaultdict
 
-UNICODE_VERSION = "17.0.0"
+UNICODE_VERSION = "18.0.0"
 UCD_URL = "https://www.unicode.org/Public/{version}/ucd/{name}"
 
 MAX_CODE_POINT = 0x10FFFF

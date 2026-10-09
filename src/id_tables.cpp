@@ -1,5 +1,8 @@
-// IDNA  17.0.0
+// IDNA  18.0.0
 // Identifier range tables are stored in the compressed blob (table_store.hpp).
+// Regenerate with: python3 scripts/derived_table.py --write
+//   id_continue: 1437 ranges
+//   id_start:    789 ranges
 
 // clang-format off
 #ifndef ADA_IDNA_IDENTIFIER_TABLES_H

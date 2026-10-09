@@ -27,6 +27,9 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           branch: ${{ matrix.arch == 'riscv64' && 'edge' || 'latest-stable' }}
+          # The action's default apk-tools v2 creates a database that apk-tools v3
+          # (Alpine >= 3.24) cannot read on ppc64le.
+          apk-tools-url: https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/v3.0.8/x86_64/apk.static#!sha256!11758d76de3699c7606152357f415f55879743ccf0e3d8942d5ba98cf29a3c86
           packages: >
             build-base
             cmake

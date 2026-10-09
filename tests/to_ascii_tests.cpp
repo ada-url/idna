@@ -416,3 +416,42 @@ TEST(to_ascii_tests, non_ascii_inputs_still_validated) {
   EXPECT_TRUE(ada::idna::to_ascii("xn--a.\xc3\x9f").empty())
       << "mixed invalid ACE + non-ASCII label should still fail";
 }
+
+// The combining mark, Bidi and normalization tables must cover the same
+// Unicode version as the mapping table (ada-url/idna#97).
+TEST(to_ascii_tests, leading_combining_mark_from_newer_unicode) {
+  // A label must not begin with a combining mark (General_Category M).
+  EXPECT_TRUE(ada::idna::to_ascii("\u0301a").empty()) << "Unicode 1.1 mark";
+  EXPECT_TRUE(ada::idna::to_ascii("\u08CBa").empty()) << "Unicode 14 mark";
+  EXPECT_TRUE(ada::idna::to_ascii("\u0897a").empty()) << "Unicode 16 mark";
+  EXPECT_TRUE(ada::idna::to_ascii("\u1AE0a").empty()) << "Unicode 17 mark";
+  // The same mark after a base character is valid.
+  EXPECT_EQ(ada::idna::to_ascii("a\u08CB"), "xn--a-mqd");
+}
+
+TEST(to_ascii_tests, rtl_characters_from_newer_unicode) {
+  // An RTL label must not contain an L character such as 'a'.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0870a").empty()) << "Unicode 14 AL";
+  EXPECT_TRUE(ada::idna::to_ascii("\U00010D4Aa").empty()) << "Unicode 16 R";
+  EXPECT_TRUE(ada::idna::to_ascii("\U00010940a").empty()) << "Unicode 17 R";
+  // An LTR label must not contain an R character.
+  EXPECT_TRUE(ada::idna::to_ascii("a\U00010940").empty()) << "Unicode 17 R";
+  // RTL labels made of these characters are valid.
+  EXPECT_EQ(ada::idna::to_ascii("\u0870\u0871"), "xn--cxbc");
+  EXPECT_EQ(ada::idna::to_ascii("\U00010D4A\U00010D4B"), "xn--9f0dc");
+  EXPECT_EQ(ada::idna::to_ascii("\U00010940\U00010941"), "xn--ql9cc");
+}
+
+TEST(to_ascii_tests, unicode16_canonical_composition) {
+  // U+1611E U+1611E composes to U+16121 GURUNG KHEMA VOWEL SIGN U, so both
+  // spellings are the same host.
+  EXPECT_EQ(ada::idna::to_ascii("a\U0001611E\U0001611E"), "xn--a-rn1m");
+  EXPECT_EQ(ada::idna::to_ascii("a\U00016121"), "xn--a-rn1m");
+  // U+1611E U+16121 is U+1611E U+1611E U+1611E, which normalizes to
+  // U+16121 U+1611E.
+  EXPECT_EQ(ada::idna::to_ascii("a\U0001611E\U00016121"), "xn--a-ln1mia");
+  EXPECT_EQ(ada::idna::to_ascii("a\U00016121\U0001611E"), "xn--a-ln1mia");
+  // U+16D68 is U+16D67 U+16D67: U+16D63 U+16D68 normalizes to U+16D6A.
+  EXPECT_EQ(ada::idna::to_ascii("a\U00016D63\U00016D68"), "xn--a-hs6m");
+  EXPECT_EQ(ada::idna::to_ascii("a\U00016D6A"), "xn--a-hs6m");
+}

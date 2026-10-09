@@ -159,6 +159,41 @@ TEST(Safety, IsAlreadyNfcCompositionExclusions) {
   EXPECT_TRUE(ada::idna::is_already_nfc(std::u32string({0x03AC})));
 }
 
+TEST(Safety, ComposesUnicode16Compositions) {
+  ASSERT_TRUE(ada::idna::ensure_tables());
+  // U+1611E U+1611E -> U+16121 GURUNG KHEMA VOWEL SIGN U.
+  std::u32string gurung_khema = {0x1611E, 0x1611E};
+  EXPECT_FALSE(ada::idna::is_already_nfc(gurung_khema));
+  ASSERT_TRUE(ada::idna::normalize(gurung_khema));
+  EXPECT_EQ(gurung_khema, std::u32string({0x16121}));
+  EXPECT_TRUE(ada::idna::is_already_nfc(std::u32string({0x16121})));
+
+  // Chained: U+16D63 U+16D67 -> U+16D69, then U+16D69 U+16D67 -> U+16D6A
+  // KIRAT RAI VOWEL SIGN AU.
+  std::u32string kirat_rai = {0x16D63, 0x16D67, 0x16D67};
+  ASSERT_TRUE(ada::idna::normalize(kirat_rai));
+  EXPECT_EQ(kirat_rai, std::u32string({0x16D6A}));
+
+  // A starter and a combining mark: U+105D2 U+0307 -> U+105C9 TODHRI LETTER EI.
+  std::u32string todhri = {0x105D2, 0x0307};
+  ASSERT_TRUE(ada::idna::normalize(todhri));
+  EXPECT_EQ(todhri, std::u32string({0x105C9}));
+
+  // A decomposition that begins with a code point composing with the starter
+  // before it: U+16121 is U+1611E U+1611E, so U+1611E U+16121 is not NFC.
+  std::u32string recomposed = {0x1611E, 0x16121};
+  EXPECT_FALSE(ada::idna::is_already_nfc(recomposed));
+  ASSERT_TRUE(ada::idna::normalize(recomposed));
+  EXPECT_EQ(recomposed, std::u32string({0x16121, 0x1611E}));
+  EXPECT_TRUE(ada::idna::is_already_nfc(recomposed));
+
+  // U+16D68 is U+16D67 U+16D67: U+16D63 U+16D68 -> U+16D69 U+16D67 -> U+16D6A.
+  std::u32string kirat_rai_ai = {0x16D63, 0x16D68};
+  EXPECT_FALSE(ada::idna::is_already_nfc(kirat_rai_ai));
+  ASSERT_TRUE(ada::idna::normalize(kirat_rai_ai));
+  EXPECT_EQ(kirat_rai_ai, std::u32string({0x16D6A}));
+}
+
 TEST(Safety, ComposesHangulLvPlusTrailingJamo) {
   ASSERT_TRUE(ada::idna::ensure_tables());
   // A precomposed LV syllable (SIndex % TCount == 0) followed by a trailing

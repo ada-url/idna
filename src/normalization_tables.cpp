@@ -1,5 +1,6 @@
 // Normalization table helpers.
 // Array payloads live in the DEFLATE blob (table_store.hpp).
+// Regenerate with: python3 scripts/unicode_data_table.py --write
 // clang-format off
 #ifndef ADA_IDNA_NORMALIZATION_TABLES_H
 #define ADA_IDNA_NORMALIZATION_TABLES_H

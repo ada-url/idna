@@ -14,6 +14,13 @@ Regenerate identifier tables from DerivedCoreProperties.txt and repack:
 
   python3 scripts/derived_table.py --write
 
+Regenerate normalization and validity (bidi/combining) tables from
+UnicodeData.txt and CompositionExclusions.txt and repack:
+
+  python3 scripts/unicode_data_table.py --write
+
+Keep every generator on the same Unicode version as IdnaMappingTable.txt.
+
 Repack using whatever is already in the blob (no-op rebuild / verify):
 
   python3 scripts/pack_tables.py
@@ -30,12 +37,9 @@ Update only some sections programmatically:
 Section layout (all present in the blob)
 ----------------------------------------
   Mapping:     idna_stage1, idna_stage2, idna_bool_blocks, idna_utf8_mappings
-  Norm:        decomposition_*, ccc_range_*, composition_*
+  Norm:        decomposition_*, ccc_*, composition_*
   Identifier:  id_continue_flat, id_start_flat
   Validity:    dir_start, dir_final, dir_value, combining_flat
-
-Normalization and bidi/combining data have no generator in this repo; they are
-preserved across regenerations by reading the existing table_blob.inc.
 """
 from __future__ import annotations
 
@@ -94,16 +98,6 @@ def _parse_blob_meta(text: str) -> dict[str, Any]:
         m.group(1): int(m.group(2))
         for m in re.finditer(r"constexpr size_t count_(\w+) = (\d+);", text)
     }
-    meta = {
-        m.group(1): int(m.group(2))
-        for m in re.finditer(
-            r"constexpr size_t (decomposition_block_rows|decomposition_block_cols|"
-            r"ccc_block_rows|ccc_block_cols|composition_block_rows|"
-            r"composition_block_cols|id_continue_count|id_start_count|"
-            r"dir_table_count|combining_range_count) = (\d+);",
-            text,
-        )
-    }
     plain = zlib.decompress(compressed, -15)
     if len(plain) != us:
         raise SystemExit(
@@ -113,7 +107,6 @@ def _parse_blob_meta(text: str) -> dict[str, Any]:
         "plain": plain,
         "offs": offs,
         "counts": counts,
-        "meta": meta,
     }
 
 
@@ -137,14 +130,11 @@ def load_blob_sections(path: Path = BLOB_PATH) -> dict[str, list[int]]:
             raise SystemExit(f"truncated read of {name}")
         vals = list(struct.unpack(fmt, raw))
         sections[name] = vals
-    # Stash meta for write_blob
-    sections["_meta"] = info["meta"]  # type: ignore[assignment]
     return sections
 
 
 def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
     """Write sections (name -> list[int]) as src/table_blob.inc."""
-    meta_in = sections.get("_meta") or {}
     blob = bytearray()
     layout: list[tuple[str, int, int, str, int]] = []
 
@@ -172,20 +162,18 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
 
     # Derive high-level counts used by table_store.hpp
     # Fixed multi-stage dimensions (Unicode page tables).
+    def block_rows(name: str, cols: int) -> int:
+        rows, rest = divmod(len(sections[name]), cols)
+        if rest:
+            raise SystemExit(f"{name} is not a whole number of rows of {cols}")
+        return rows
+
     meta = {
-        "decomposition_block_rows": meta_in.get(
-            "decomposition_block_rows",
-            len(sections["decomposition_block"]) // 257,
-        ),
+        "decomposition_block_rows": block_rows("decomposition_block", 257),
         "decomposition_block_cols": 257,
-        "ccc_block_rows": meta_in.get(
-            "ccc_block_rows", len(sections["ccc_block"]) // 256
-        ),
+        "ccc_block_rows": block_rows("ccc_block", 256),
         "ccc_block_cols": 256,
-        "composition_block_rows": meta_in.get(
-            "composition_block_rows",
-            len(sections["composition_block"]) // 257,
-        ),
+        "composition_block_rows": block_rows("composition_block", 257),
         "composition_block_cols": 257,
         "id_continue_count": len(sections["id_continue_flat"]) // 2,
         "id_start_count": len(sections["id_start_flat"]) // 2,

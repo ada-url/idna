@@ -206,6 +206,23 @@ TEST(to_ascii_tests, contextj_joiner_does_not_bypass_bidi) {
       << "valid ZWNJ label must still convert";
 }
 
+TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
+  // Ported from ada-url/ada#1276. A virama before a joiner settles only that
+  // joiner: later joiners in the label still need their own ContextJ check,
+  // and the RFC 5893 Bidi rule must still run on the label.
+  // 'a' (L) + virama + ZWNJ + ZWJ: the ZWJ has no virama before it.
+  EXPECT_TRUE(ada::idna::to_ascii("a\u094D\u200C\u200D.example").empty())
+      << "a joiner after a valid virama+ZWNJ must still be checked";
+  // '1' (EN) + U+05D0 (R) + virama + ZWNJ: the ZWNJ is valid, but Bidi rule 1
+  // requires the first character to be L, R or AL.
+  EXPECT_TRUE(ada::idna::to_ascii("1\u05D0\u094D\u200C.example").empty())
+      << "valid ZWNJ must not bypass Bidi rule 1";
+  // Devanagari KA + virama + ZWNJ + KA is valid.
+  EXPECT_EQ(ada::idna::to_ascii("\u0915\u094D\u200C\u0915.example"),
+            "xn--11ba1ow90g.example")
+      << "valid ZWNJ label must still convert";
+}
+
 // Helper: domain-to-ASCII as URL Standard callers use it (to_ascii + forbidden
 // domain code point filter). Empty string means failure.
 static std::string domain_to_ascii(std::string_view input) {

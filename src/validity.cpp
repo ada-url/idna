@@ -6,6 +6,8 @@
 
 namespace ada::idna {
 
+// Values stored in dir_value; keep in sync with BIDI_CLASSES in
+// scripts/unicode_data_table.py.
 enum direction : uint8_t {
   NONE,
   BN,
@@ -35,6 +37,7 @@ enum direction : uint8_t {
 
 // Bidi direction ranges live in the compressed blob as const SoA arrays
 // (dir_start / dir_final / dir_value). See table_store.hpp layout asserts.
+// Regenerate with: python3 scripts/unicode_data_table.py --write
 
 // CheckJoiners and CheckBidi are true for URL specification.
 

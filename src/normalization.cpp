@@ -154,6 +154,28 @@ void decompose_nfc(std::u32string& input) {
   sort_marks(input);
 }
 
+// Returns true if the composition row of a starter has a pair with `second`.
+static bool has_composition(const uint16_t* composition,
+                            char32_t second) noexcept {
+  int left = composition[0];
+  int right = composition[1];
+  if (left < 0 || right <= left ||
+      static_cast<size_t>(right) > composition_data_size) {
+    return false;
+  }
+  while (left + 2 < right) {
+    int middle = left + (((right - left) >> 1) & ~1);
+    if (composition_data[static_cast<size_t>(middle)] <= second) {
+      left = middle;
+    }
+    if (composition_data[static_cast<size_t>(middle)] >= second) {
+      right = middle;
+    }
+  }
+  return static_cast<size_t>(left + 1) < composition_data_size &&
+         composition_data[static_cast<size_t>(left)] == second;
+}
+
 // Returns true if a composition step would change the string.
 static bool would_compose(std::u32string_view input) noexcept {
   for (size_t input_count = 0; input_count < input.size();) {
@@ -185,26 +207,9 @@ static bool would_compose(std::u32string_view input) noexcept {
       size_t j = input_count;
       for (; j + 1 < input.size(); ++j) {
         uint8_t ccc = get_ccc(input[j + 1]);
-        if (composition[1] != composition[0] && previous_ccc < ccc) {
-          int left = composition[0];
-          int right = composition[1];
-          if (left < 0 || right < left ||
-              static_cast<size_t>(right) > composition_data_size) {
-            break;
-          }
-          while (left + 2 < right) {
-            int middle = left + (((right - left) >> 1) & ~1);
-            if (composition_data[static_cast<size_t>(middle)] <= input[j + 1]) {
-              left = middle;
-            }
-            if (composition_data[static_cast<size_t>(middle)] >= input[j + 1]) {
-              right = middle;
-            }
-          }
-          if (static_cast<size_t>(left + 1) < composition_data_size &&
-              composition_data[static_cast<size_t>(left)] == input[j + 1]) {
-            return true;
-          }
+        if (composition[1] != composition[0] && previous_ccc < ccc &&
+            has_composition(composition, input[j + 1])) {
+          return true;
         }
         if (ccc == 0) {
           break;
@@ -244,7 +249,10 @@ void compose(std::u32string& input);
 // U+03AC) or does not compose at all (e.g. U+0958 DEVANAGARI LETTER QA ->
 // U+0915 U+093C), and non-starter decompositions such as U+0344 -> U+0308
 // U+0301 stay decomposed. All are NFC_Quick_Check=No and must be normalized.
-static bool decomposition_is_not_nfc(char32_t c) noexcept {
+// Since Unicode 16 the first code point of a decomposition can also compose
+// with the preceding character: U+16121 is U+1611E U+1611E, so U+1611E U+16121
+// normalizes to U+16121 U+1611E.
+static bool decomposition_is_not_nfc(char32_t previous, char32_t c) noexcept {
   if (c >= hangul_sbase && c < hangul_sbase + hangul_scount) {
     return false;
   }
@@ -269,7 +277,14 @@ static bool decomposition_is_not_nfc(char32_t c) noexcept {
   std::u32string decomposed(decomposition_data + base,
                             decomposition_data + base + length);
   compose(decomposed);
-  return !(decomposed.size() == 1 && decomposed[0] == c);
+  if (!(decomposed.size() == 1 && decomposed[0] == c)) {
+    return true;
+  }
+  return previous < 0x110000 &&
+         has_composition(
+             composition_block_row(composition_index[previous >> 8]) +
+                 (previous % 256),
+             decomposition_data[base]);
 }
 
 bool is_already_nfc(std::u32string_view input) noexcept {
@@ -281,11 +296,15 @@ bool is_already_nfc(std::u32string_view input) noexcept {
   }
   // 1) A character whose canonical decomposition does not compose back to it is
   //    not NFC: singletons (e.g. U+212B), composition exclusions (e.g. U+0958)
-  //    and non-starter decompositions (e.g. U+0344).
+  //    and non-starter decompositions (e.g. U+0344), or one whose
+  //    decomposition starts with a code point that composes with the previous
+  //    character (e.g. U+1611E U+16121).
+  char32_t previous = 0x110000;  // none
   for (char32_t c : input) {
-    if (decomposition_is_not_nfc(c)) {
+    if (decomposition_is_not_nfc(previous, c)) {
       return false;
     }
+    previous = c;
   }
   // 2) Combining marks already in canonical order. prev_ccc carries the
   //    trailing class of the previous character's canonical decomposition so a

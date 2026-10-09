@@ -234,6 +234,24 @@ TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
       << "valid ZWNJ label must still convert";
 }
 
+TEST(to_ascii_tests, bidi_rule_applies_to_every_label_of_a_bidi_domain) {
+  // RFC 5893 Section 2: once any label is RTL, all labels must satisfy the
+  // Bidi rule, ASCII labels included. "1"/"1a" start with EN (rule 1), "a-"
+  // ends with ES (rule 6), U+226F is ON (rule 1).
+  EXPECT_TRUE(ada::idna::to_ascii("1.\u0627").empty());
+  EXPECT_TRUE(ada::idna::to_ascii("1a.\u0627").empty());
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.1a").empty());
+  EXPECT_TRUE(ada::idna::to_ascii("a-.\u0627").empty());
+  EXPECT_TRUE(ada::idna::to_ascii("\u226F.\u0627").empty());
+  // LTR labels that satisfy the rule are fine next to an RTL label.
+  EXPECT_EQ(ada::idna::to_ascii("a.\u0627"), "a.xn--mgb");
+  EXPECT_EQ(ada::idna::to_ascii("a1.\u0627"), "a1.xn--mgb");
+  // With no RTL label in the domain, a digit-leading label stays valid.
+  EXPECT_FALSE(ada::idna::to_ascii("1.b\u00FC").empty());
+  // All-ASCII input keeps the URL Standard carve-out (no validation).
+  EXPECT_EQ(ada::idna::to_ascii("1.xn--mgb"), "1.xn--mgb");
+}
+
 TEST(to_ascii_tests, contextj_viramas_from_newer_unicode) {
   // Any Canonical_Combining_Class=Virama (9) character allows a following
   // ZWNJ or ZWJ (RFC 5892 Appendix A). Each label is letter + virama + joiner

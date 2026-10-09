@@ -20,7 +20,7 @@ IGNORED_IDX  = 0
 # ─── Download / cache IDNA mapping table ─────────────────────────────────────
 # Keep in step with the Unicode version of the other generators
 # (scripts/derived_table.py); Public/idna/latest moves to each new release.
-UNICODE_VERSION = "17.0.0"
+UNICODE_VERSION = "18.0.0"
 url      = f"https://www.unicode.org/Public/{UNICODE_VERSION}/idna/IdnaMappingTable.txt"
 filename = f"IdnaMappingTable-{UNICODE_VERSION}.txt"
 

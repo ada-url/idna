@@ -1,11 +1,13 @@
-// IDNA 17.0.0
-// Two-level compressed mapping table.
-// All constants are derived from the table data; no hardcoded boundaries.
-// Total binary size: 48659 bytes (47.5 KB)
-//   stage1:        6564 bytes  (3282 uint16_t entries)
-//   stage2:       22912 bytes  (179 mixed blocks x 64)
+// IDNA 18.0.0
+// Two-level compressed mapping table (constants only).
+// Array payloads are stored in the DEFLATE blob (see table_store.hpp /
+// scripts/pack_tables.py).
+// Regenerate with: python3 scripts/idna_table.py --write
+// Logical table size: 51037 bytes (49.8 KB)
+//   stage1:        8162 bytes  (4081 uint16_t entries)
+//   stage2:       23424 bytes  (183 mixed blocks x 64)
 //   bool_blocks:   1800 bytes  (225 uint64_t words)
-//   utf8 maps:    17383 bytes
+//   utf8 maps:    17651 bytes
 
 // clang-format off
 #ifndef ADA_IDNA_MAPPING_TABLE_H
@@ -30,7 +32,7 @@ constexpr uint16_t IDNA_BOOL_FLAG  = 0x8000;
 // Two-level table covers code points [0, IDNA_LOW_RANGE_END).
 // Derived from the highest non-disallowed code point below the high-ignored range,
 // rounded up to the next 64-code-point block boundary.
-constexpr uint32_t IDNA_LOW_RANGE_END    = 0x00033480;
+constexpr uint32_t IDNA_LOW_RANGE_END    = 0x0003FC40;
 
 // Variation selectors supplement: U+E0100..U+E01EF are all ignored.
 // These are handled with a simple range check; everything else above
@@ -38,9 +40,7 @@ constexpr uint32_t IDNA_LOW_RANGE_END    = 0x00033480;
 constexpr uint32_t IDNA_HIGH_IGNORED_START = 0x000E0100;
 constexpr uint32_t IDNA_HIGH_IGNORED_END   = 0x000E01F0;  // exclusive
 
-// idna_stage1[cp >> 6]: one entry per 64-code-point block.
-// Bit 15 set  -> lower 15 bits = index into idna_bool_blocks[].
-// Bit 15 clear -> value = base offset into idna_stage2[] for this block.
+// Large arrays (idna_stage1/stage2/bool_blocks/utf8_mappings) live in table_blob.
 
 }  // namespace ada::idna
 #endif  // ADA_IDNA_MAPPING_TABLE_H

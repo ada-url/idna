@@ -99,6 +99,10 @@ TEST(mapping_tests, single_codepoint_mappings) {
   EXPECT_EQ(ada::idna::map(U"\U0000FF21"), U"a");
   // U+FF3A FULLWIDTH LATIN CAPITAL LETTER Z -> 'z'
   EXPECT_EQ(ada::idna::map(U"\U0000FF3A"), U"z");
+  // U+A7DD LATIN CAPITAL LETTER CLOSED OMEGA (Unicode 18) -> U+0277
+  EXPECT_EQ(ada::idna::map(U"\U0000A7DD"), U"\U00000277");
+  // U+1DF40 LATIN CAPITAL LETTER BARRED A (Unicode 18) -> U+1DF41
+  EXPECT_EQ(ada::idna::map(U"\U0001DF40"), U"\U0001DF41");
 }
 
 // ── Multi-code-point mappings ──────────────────────────────────────────────
@@ -136,8 +140,8 @@ TEST(mapping_tests, valid_non_ascii_unchanged) {
   EXPECT_EQ(ada::idna::map(U"\U00004E2D"), U"\U00004E2D");
 }
 
-// ── Mid-range boundaries (0x30000–0x3347A) ────────────────────────────────
-// These code points are inside the two-level table (LOW_RANGE_END = 0x33480).
+// ── Mid-range boundaries (0x30000–0x3FC40) ────────────────────────────────
+// These code points are inside the two-level table (LOW_RANGE_END = 0x3FC40).
 // U+3134B–U+3134F is a small disallowed gap within an otherwise-valid range.
 TEST(mapping_tests, mid_range_boundaries) {
   // U+2FFFF: last code point inside the low-range two-level table
@@ -159,11 +163,23 @@ TEST(mapping_tests, mid_range_boundaries) {
   // U+31350: first valid of mid-range part 2 (CJK Extension J start)
   EXPECT_EQ(ada::idna::map(U"\U00031350"), (std::u32string{0x31350}));
 
-  // U+33479: last valid of mid range
+  // U+33479: last valid of CJK Extension J
   EXPECT_EQ(ada::idna::map(U"\U00033479"), (std::u32string{0x33479}));
 
-  // U+3347A: first disallowed after the mid range
+  // U+3347A: first disallowed after CJK Extension J
   EXPECT_TRUE(ada::idna::map(U"\U0003347A").empty());
+
+  // U+3CFFF: last disallowed before the Small Seal block
+  EXPECT_TRUE(ada::idna::map(U"\U0003CFFF").empty());
+
+  // U+3D000: first Small Seal character (Unicode 18)
+  EXPECT_EQ(ada::idna::map(U"\U0003D000"), (std::u32string{0x3D000}));
+
+  // U+3FC3F: last Small Seal character, the last valid code point of the table
+  EXPECT_EQ(ada::idna::map(U"\U0003FC3F"), (std::u32string{0x3FC3F}));
+
+  // U+3FC40: first code point past the two-level table -> disallowed
+  EXPECT_TRUE(ada::idna::map(U"\U0003FC40").empty());
 }
 
 // ── High ignored range boundaries (0xE0100–0xE01EF) ───────────────────────

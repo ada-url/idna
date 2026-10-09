@@ -14,8 +14,9 @@ Regenerate identifier tables from DerivedCoreProperties.txt and repack:
 
   python3 scripts/derived_table.py --write
 
-Regenerate normalization and validity (bidi/combining) tables from
-UnicodeData.txt and CompositionExclusions.txt and repack:
+Regenerate normalization and validity (bidi/combining/joining) tables from
+UnicodeData.txt, CompositionExclusions.txt and DerivedJoiningType.txt and
+repack:
 
   python3 scripts/unicode_data_table.py --write
 
@@ -39,7 +40,11 @@ Section layout (all present in the blob)
   Mapping:     idna_stage1, idna_stage2, idna_bool_blocks, idna_utf8_mappings
   Norm:        decomposition_*, ccc_*, composition_*
   Identifier:  id_continue_flat, id_start_flat
-  Validity:    dir_start, dir_final, dir_value, combining_flat
+  Validity:    dir_start, dir_final, dir_value, combining_flat,
+               joining_start, joining_final, joining_value
+
+load_blob_sections() skips sections that the current blob does not have yet,
+so a generator can add a new section; write_blob() requires every section.
 """
 from __future__ import annotations
 
@@ -75,6 +80,9 @@ SECTION_ORDER = [
     ("dir_final", "u32"),
     ("dir_value", "u8"),
     ("combining_flat", "u32"),
+    ("joining_start", "u32"),
+    ("joining_final", "u32"),
+    ("joining_value", "u8"),
 ]
 
 ALIGN = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
@@ -120,7 +128,7 @@ def load_blob_sections(path: Path = BLOB_PATH) -> dict[str, list[int]]:
     sections: dict[str, list[int]] = {}
     for name, kind in SECTION_ORDER:
         if name not in offs:
-            raise SystemExit(f"blob missing section {name}")
+            continue
         off = offs[name]
         count = counts[name]
         w = WIDTH[kind]
@@ -179,6 +187,7 @@ def write_blob(sections: dict[str, Any], path: Path = BLOB_PATH) -> None:
         "id_start_count": len(sections["id_start_flat"]) // 2,
         "dir_table_count": len(sections["dir_start"]),
         "combining_range_count": len(sections["combining_flat"]) // 2,
+        "joining_table_count": len(sections["joining_start"]),
     }
 
     def c_bytes(data: bytes, per: int = 16) -> str:
@@ -247,7 +256,8 @@ def write_mapping_constants(
     text = f"""// IDNA {version}
 // Two-level compressed mapping table (constants only).
 // Array payloads are stored in the DEFLATE blob (see table_store.hpp /
-// scripts/pack_tables.py). Regenerate with: python3 scripts/idna_table.py --write
+// scripts/pack_tables.py).
+// Regenerate with: python3 scripts/idna_table.py --write
 // Logical table size: {total} bytes ({total / 1024:.1f} KB)
 //   stage1:      {len(stage1) * 2:6} bytes  ({len(stage1)} uint16_t entries)
 //   stage2:      {len(mixed_data) * 2:6} bytes  ({len(mixed_data) // block_size} mixed blocks x {block_size})

@@ -104,6 +104,8 @@ inline void convert_table_blob_to_host_endian(uint8_t* buffer) noexcept {
   u32(table_blob::off_dir_start, table_blob::count_dir_start);
   u32(table_blob::off_dir_final, table_blob::count_dir_final);
   u32(table_blob::off_combining_flat, table_blob::count_combining_flat);
+  u32(table_blob::off_joining_start, table_blob::count_joining_start);
+  u32(table_blob::off_joining_final, table_blob::count_joining_final);
 }
 
 }  // namespace detail
@@ -123,6 +125,10 @@ static_assert(table_blob::count_composition_block ==
 static_assert(table_blob::count_dir_start == table_blob::dir_table_count &&
               table_blob::count_dir_final == table_blob::dir_table_count &&
               table_blob::count_dir_value == table_blob::dir_table_count);
+static_assert(
+    table_blob::count_joining_start == table_blob::joining_table_count &&
+    table_blob::count_joining_final == table_blob::joining_table_count &&
+    table_blob::count_joining_value == table_blob::joining_table_count);
 static_assert(table_blob::count_id_continue_flat ==
               table_blob::id_continue_count * 2);
 static_assert(table_blob::count_id_start_flat ==
@@ -141,6 +147,8 @@ static_assert(table_blob::off_id_start_flat % alignof(uint32_t) == 0);
 static_assert(table_blob::off_dir_start % alignof(uint32_t) == 0);
 static_assert(table_blob::off_dir_final % alignof(uint32_t) == 0);
 static_assert(table_blob::off_combining_flat % alignof(uint32_t) == 0);
+static_assert(table_blob::off_joining_start % alignof(uint32_t) == 0);
+static_assert(table_blob::off_joining_final % alignof(uint32_t) == 0);
 static_assert(table_blob::compressed_size == sizeof(table_blob::compressed));
 
 // Every section must lie entirely inside the uncompressed buffer.
@@ -183,6 +191,12 @@ ADA_IDNA_SECTION_IN_BOUNDS(table_blob::off_dir_value,
                            table_blob::count_dir_value, 1);
 ADA_IDNA_SECTION_IN_BOUNDS(table_blob::off_combining_flat,
                            table_blob::count_combining_flat, 4);
+ADA_IDNA_SECTION_IN_BOUNDS(table_blob::off_joining_start,
+                           table_blob::count_joining_start, 4);
+ADA_IDNA_SECTION_IN_BOUNDS(table_blob::off_joining_final,
+                           table_blob::count_joining_final, 4);
+ADA_IDNA_SECTION_IN_BOUNDS(table_blob::off_joining_value,
+                           table_blob::count_joining_value, 1);
 #undef ADA_IDNA_SECTION_IN_BOUNDS
 
 // --- Mapping -----------------------------------------------------------------
@@ -214,10 +228,14 @@ inline const uint32_t* dir_start = nullptr;
 inline const uint32_t* dir_final = nullptr;
 inline const uint8_t* dir_value = nullptr;
 inline range_pair_ptr combining_ranges = nullptr;
+inline const uint32_t* joining_start = nullptr;
+inline const uint32_t* joining_final = nullptr;
+inline const uint8_t* joining_value = nullptr;
 
 inline constexpr size_t id_continue_count = table_blob::id_continue_count;
 inline constexpr size_t id_start_count = table_blob::id_start_count;
 inline constexpr size_t dir_table_count = table_blob::dir_table_count;
+inline constexpr size_t joining_table_count = table_blob::joining_table_count;
 inline constexpr size_t combining_range_count =
     table_blob::combining_range_count;
 inline constexpr size_t idna_utf8_mappings_size =
@@ -341,6 +359,11 @@ inline constexpr uint64_t kTablesSpinLimit = 1'000'000'000ull;
     dir_value = at(table_blob::off_dir_value);
     combining_ranges =
         reinterpret_cast<range_pair_ptr>(at(table_blob::off_combining_flat));
+    joining_start =
+        reinterpret_cast<const uint32_t*>(at(table_blob::off_joining_start));
+    joining_final =
+        reinterpret_cast<const uint32_t*>(at(table_blob::off_joining_final));
+    joining_value = at(table_blob::off_joining_value);
 
     tables_buffer = buffer;
     tables_init_state.store(kTablesReady, std::memory_order_release);

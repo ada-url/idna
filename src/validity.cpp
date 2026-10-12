@@ -128,7 +128,9 @@ inline static size_t find_last_not_of_nsm(
 }
 
 // An RTL label is a label that contains at least one character of type R, AL,
-// or AN. https://www.rfc-editor.org/rfc/rfc5893#section-2
+// or AN. A domain containing one is a Bidi domain name: RFC 5893 then applies
+// to every label, including labels that are themselves all LTR.
+// https://www.rfc-editor.org/rfc/rfc5893#section-2
 inline static bool is_rtl_label(const std::u32string_view label) noexcept {
   const size_t mask =
       (1u << direction::R) | (1u << direction::AL) | (1u << direction::AN);
@@ -140,7 +142,21 @@ inline static bool is_rtl_label(const std::u32string_view label) noexcept {
   return (directions & mask) != 0;
 }
 
-bool is_label_valid(const std::u32string_view label) {
+// Same as is_rtl_label, but loads the Bidi tables first. Visible to to_ascii
+// and to_unicode, which are part of this translation unit.
+inline static bool label_contains_rtl(std::u32string_view label) noexcept {
+  if (label.empty() || !ensure_tables() || dir_start == nullptr ||
+      dir_final == nullptr || dir_value == nullptr) {
+    return false;
+  }
+  return is_rtl_label(label);
+}
+
+// `bidi_domain` is true when the domain name contains at least one RTL label.
+// CheckBidi then applies to this label even if the label itself has no R, AL,
+// or AN character (RFC 5893). The one-argument is_label_valid() passes false,
+// which preserves the per-label check for callers that do not know yet.
+static bool check_label(const std::u32string_view label, bool bidi_domain) {
   if (label.empty()) {
     return true;
   }
@@ -231,8 +247,8 @@ bool is_label_valid(const std::u32string_view label) {
 
   // A "Bidi domain name" is a domain name that contains at least one RTL label.
   // The following rule, consisting of six conditions, applies to labels in Bidi
-  // domain names.
-  if (is_rtl_label(label)) {
+  // domain names: every label, not only the RTL ones.
+  if (bidi_domain || is_rtl_label(label)) {
     // The first character must be a character with Bidi property L, R,
     // or AL. If it has the R or AL property, it is an RTL label; if it
     // has the L property, it is an LTR label.
@@ -299,6 +315,10 @@ bool is_label_valid(const std::u32string_view label) {
   }
 
   return true;
+}
+
+bool is_label_valid(const std::u32string_view label) {
+  return check_label(label, false);
 }
 
 }  // namespace ada::idna

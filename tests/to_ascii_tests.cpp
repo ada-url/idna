@@ -259,6 +259,25 @@ TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
   EXPECT_EQ(ada::idna::to_ascii("\uAC00\u11A8.example"), "xn--p39a.example");
 }
 
+TEST(to_ascii_tests, bidi_domain_checks_every_label) {
+  // RFC 5893 applies to every label of a domain that contains an RTL label,
+  // including labels that have no R, AL, or AN character of their own.
+  // ada-url/ada#1277.
+  EXPECT_TRUE(ada::idna::to_ascii("1.\u0627").empty())
+      << "EN-leading label in a Bidi domain violates rule 1";
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.1a").empty())
+      << "EN-leading label in a Bidi domain violates rule 1";
+  EXPECT_TRUE(ada::idna::to_ascii("1a.\u0627").empty());
+  // An LTR label that starts with L and ends with L or EN is allowed.
+  EXPECT_EQ(ada::idna::to_ascii("example.\u0627"), "example.xn--mgb");
+  EXPECT_EQ(ada::idna::to_ascii("a1.\u0627"), "a1.xn--mgb");
+  EXPECT_EQ(ada::idna::to_ascii("\u0627.example"), "xn--mgb.example");
+  // Not a Bidi domain, so a leading digit is fine.
+  EXPECT_EQ(ada::idna::to_ascii("1.example"), "1.example");
+  // All-ASCII input, including punycode, stays on the WHATWG fast path.
+  EXPECT_EQ(ada::idna::to_ascii("1.xn--mgb"), "1.xn--mgb");
+}
+
 TEST(to_ascii_tests, contextj_viramas_from_newer_unicode) {
   // Any Canonical_Combining_Class=Virama (9) character allows a following
   // ZWNJ or ZWJ (RFC 5892 Appendix A). Each label is letter + virama + joiner

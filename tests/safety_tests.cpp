@@ -33,6 +33,16 @@ TEST(Safety, ToAsciiAcceptsLongAsciiInput) {
   ASSERT_TRUE(ada::idna::to_ascii(huge, out));
   EXPECT_EQ(out.size(), huge.size());
   EXPECT_EQ(out[0], 'a');
+
+  // ASCII xn-- host exceeding max_domain_input_bytes
+  std::string huge_xn;
+  for (int i = 0; i < 2049; i++) {
+    huge_xn += "xn--0ca.";
+  }
+  ASSERT_GT(huge_xn.size(), ada::idna::max_domain_input_bytes);
+  std::string out_xn;
+  ASSERT_TRUE(ada::idna::to_ascii(huge_xn, out_xn));
+  EXPECT_EQ(out_xn, huge_xn);
 }
 
 TEST(Safety, ToAsciiIdempotentAcrossLimit) {

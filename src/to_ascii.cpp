@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ranges>
+#include <vector>
 
 #include "ada/idna/mapping.h"
 #include "ada/idna/normalization.h"
@@ -144,6 +145,11 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
   const char32_t* const end = p + mapped.size();
   std::u32string post_map;
 
+  // Validation is deferred until every label is known: the Bidi rule applies
+  // to all labels once any label of the domain is RTL (RFC 5893 Section 2).
+  // Only decoded ACE labels need storage; others are re-read from `mapped`.
+  std::vector<std::u32string> decoded_labels;
+
   while (p < end) {
     const char32_t* label_begin = p;
     while (p < end && *p != U'.') {
@@ -188,17 +194,14 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
           return false;
         }
       }
-      if (post_map.empty() || !is_label_valid(post_map)) {
+      if (post_map.empty()) {
         out.clear();
         return false;
       }
+      decoded_labels.push_back(post_map);
     } else if (is_ascii(label_view)) {
       append_ascii_label(out, label_view);
     } else {
-      if (!is_label_valid(label_view)) {
-        out.clear();
-        return false;
-      }
       out.append("xn--");
       if (!ada::idna::utf32_to_punycode(label_view, out)) {
         out.clear();
@@ -208,6 +211,50 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
     if (!is_last_label) {
       out.push_back('.');
     }
+  }
+
+  // Validity criteria (UTS #46 Section 4.1). CheckBidi is decided for the whole
+  // domain: with one RTL label anywhere, every label must satisfy it. Walk the
+  // labels of `mapped` again (ACE labels in decoded form); `fn` returns false
+  // to stop.
+  const auto for_each_label = [&](auto&& fn) -> bool {
+    size_t ace_index = 0;
+    const char32_t* q = mapped.data();
+    for (;;) {
+      const char32_t* label_begin = q;
+      while (q < end && *q != U'.') {
+        ++q;
+      }
+      std::u32string_view v(label_begin, static_cast<size_t>(q - label_begin));
+      if (!v.empty() && is_ace_prefix(v)) {
+        v = decoded_labels[ace_index++];
+      }
+      if (!fn(v)) {
+        return false;
+      }
+      if (q == end) {
+        return true;
+      }
+      ++q;  // skip dot
+    }
+  };
+  bool bidi_domain = false;
+  for_each_label([&](std::u32string_view v) {
+    if (!is_ascii(v) && has_rtl_characters(v)) {
+      bidi_domain = true;
+      return false;
+    }
+    return true;
+  });
+  const bool labels_valid = for_each_label([&](std::u32string_view v) {
+    if (v.empty() || (!bidi_domain && is_ascii(v))) {
+      return true;
+    }
+    return is_label_valid(v, bidi_domain);
+  });
+  if (!labels_valid) {
+    out.clear();
+    return false;
   }
   return true;
 }

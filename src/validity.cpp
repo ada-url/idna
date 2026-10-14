@@ -140,7 +140,7 @@ inline static bool is_rtl_label(const std::u32string_view label) noexcept {
   return (directions & mask) != 0;
 }
 
-bool is_label_valid(const std::u32string_view label) {
+bool is_label_valid(const std::u32string_view label, bool bidi_domain) {
   if (label.empty()) {
     return true;
   }
@@ -230,9 +230,12 @@ bool is_label_valid(const std::u32string_view label) {
   }
 
   // A "Bidi domain name" is a domain name that contains at least one RTL label.
-  // The following rule, consisting of six conditions, applies to labels in Bidi
-  // domain names.
-  if (is_rtl_label(label)) {
+  // RFC 5893 Section 2 then applies all six conditions to *every* label of the
+  // name, including labels with no RTL character (e.g. an all-ASCII "1" fails
+  // condition 1). The caller decides `bidi_domain` from the whole domain; see
+  // to_ascii(). The one-argument overload below keeps the old per-label
+  // behaviour for callers without domain context.
+  if (bidi_domain) {
     // The first character must be a character with Bidi property L, R,
     // or AL. If it has the R or AL property, it is an RTL label; if it
     // has the L property, it is an LTR label.
@@ -299,6 +302,20 @@ bool is_label_valid(const std::u32string_view label) {
   }
 
   return true;
+}
+
+bool has_rtl_characters(const std::u32string_view label) {
+  if (!ensure_tables() || dir_start == nullptr || dir_final == nullptr ||
+      dir_value == nullptr) {
+    return false;
+  }
+  return is_rtl_label(label);
+}
+
+bool is_label_valid(const std::u32string_view label) {
+  // Without domain context, apply the Bidi rule only when the label itself is
+  // an RTL label (its previous behaviour).
+  return is_label_valid(label, has_rtl_characters(label));
 }
 
 }  // namespace ada::idna

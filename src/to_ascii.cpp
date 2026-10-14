@@ -84,6 +84,53 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
          label[2] == U'-' && label[3] == U'-';
 }
 
+// RFC 5893: a Bidi domain name contains at least one RTL label. CheckBidi then
+// applies to every label in the domain, so this must be known before the first
+// label is validated. ACE labels are decoded; a decode failure is left for the
+// conversion pass, which rejects the domain.
+static bool mapped_domain_is_bidi(std::u32string_view mapped) {
+  const char32_t* p = mapped.data();
+  const char32_t* const end = p + mapped.size();
+  std::string puny;
+  std::u32string decoded;
+  while (p < end) {
+    const char32_t* begin = p;
+    while (p < end && *p != U'.') {
+      ++p;
+    }
+    const std::u32string_view label(begin, static_cast<size_t>(p - begin));
+    if (p < end) {
+      ++p;
+    }
+    if (label.empty()) {
+      continue;
+    }
+    if (is_ace_prefix(label)) {
+      bool ace_ascii = true;
+      for (char32_t c : label) {
+        if (c >= 0x80) {
+          ace_ascii = false;
+          break;
+        }
+      }
+      if (!ace_ascii) {
+        continue;
+      }
+      puny.resize(label.size() - 4);
+      for (size_t i = 0; i < puny.size(); i++) {
+        puny[i] = static_cast<char>(label[i + 4]);
+      }
+      decoded.clear();
+      if (punycode_to_utf32(puny, decoded) && label_contains_rtl(decoded)) {
+        return true;
+      }
+    } else if (label_contains_rtl(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 [[nodiscard]] bool to_ascii(std::string_view ut8_string, std::string& out) {
   out.clear();
   // The ASCII path is a single same-size copy, so it needs no length bound.
@@ -135,6 +182,9 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
       return false;
     }
   }
+
+  // CheckBidi applies to every label once any label is RTL (RFC 5893).
+  const bool bidi_domain = mapped_domain_is_bidi(mapped);
 
   // Estimate ASCII output size (punycode may expand non-ASCII labels).
   out.reserve(mapped.size() + 8);
@@ -188,14 +238,20 @@ static bool is_ace_prefix(std::u32string_view label) noexcept {
           return false;
         }
       }
-      if (post_map.empty() || !is_label_valid(post_map)) {
+      if (post_map.empty() || !check_label(post_map, bidi_domain)) {
         out.clear();
         return false;
       }
     } else if (is_ascii(label_view)) {
+      // All-ASCII domains never reach here (they return above). An ASCII label
+      // in a Bidi domain must still satisfy RFC 5893 rules 1, 5, and 6.
+      if (bidi_domain && !check_label(label_view, true)) {
+        out.clear();
+        return false;
+      }
       append_ascii_label(out, label_view);
     } else {
-      if (!is_label_valid(label_view)) {
+      if (!check_label(label_view, bidi_domain)) {
         out.clear();
         return false;
       }

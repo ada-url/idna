@@ -80,3 +80,13 @@ TEST_F(IdnaToUnicodeTest, AlternatingFileConversions) {
     ASSERT_EQ(ada::idna::to_unicode(input), output);
   }
 }
+
+TEST_F(IdnaToUnicodeTest, BidiDomainKeepsOriginalWhenAsciiLabelFails) {
+  // "1.xn--mgb" decodes to "1." + U+0627. The digit label violates RFC 5893
+  // rule 1 because the domain is a Bidi domain, so ToUnicode keeps the input.
+  EXPECT_EQ(ada::idna::to_unicode("1.xn--mgb"), "1.xn--mgb");
+  EXPECT_EQ(ada::idna::to_unicode("xn--mgb.1a"), "xn--mgb.1a");
+  // "example" satisfies the LTR Bidi rules, so the RTL label is converted.
+  EXPECT_EQ(ada::idna::to_unicode("example.xn--mgb"), "example.\u0627");
+  EXPECT_EQ(ada::idna::to_unicode("xn--mgb.example"), "\u0627.example");
+}

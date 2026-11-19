@@ -17,10 +17,78 @@
 
 namespace ada::idna {
 
+// True when an all-ASCII label is valid on its own but violates RFC 5893
+// because the domain contains an RTL label (for example a label starting
+// with a digit). ToUnicode then returns the original input (UTS #46).
+static bool ascii_label_fails_bidi_domain(std::string_view label) {
+  std::u32string utf32(label.size(), 0);
+  for (size_t i = 0; i < label.size(); i++) {
+    utf32[i] = static_cast<unsigned char>(label[i]);
+  }
+  return check_label(utf32, false) && !check_label(utf32, true);
+}
+
+static bool utf8_domain_is_bidi(std::string_view input) {
+  std::u32string decoded;
+  size_t label_start = 0;
+  while (label_start < input.size()) {
+    const size_t loc_dot = input.find('.', label_start);
+    const bool is_last_label = (loc_dot == std::string_view::npos);
+    const size_t label_size =
+        is_last_label ? input.size() - label_start : loc_dot - label_start;
+    const std::string_view label = input.substr(label_start, label_size);
+    if (label.starts_with("xn--") && is_ascii(label)) {
+      decoded.clear();
+      if (label.size() > 4 && punycode_to_utf32(label.substr(4), decoded) &&
+          label_contains_rtl(decoded)) {
+        return true;
+      }
+    } else if (!is_ascii(label)) {
+      const size_t utf32_length =
+          utf32_length_from_utf8(label.data(), label.size());
+      if (utf32_length != 0) {
+        decoded.assign(utf32_length, 0);
+        const size_t written =
+            utf8_to_utf32(label.data(), label.size(), decoded.data());
+        if (written == utf32_length && label_contains_rtl(decoded)) {
+          return true;
+        }
+      }
+    }
+    if (is_last_label) {
+      break;
+    }
+    label_start += label_size + 1;
+  }
+  return false;
+}
+
 [[nodiscard]] bool to_unicode(std::string_view input, std::string& output) {
   output.clear();
   if (input.size() > max_domain_input_bytes) {
     return false;
+  }
+  // An ASCII label that is only illegal because the domain is a Bidi domain
+  // fails ToUnicode for the whole input (UTS #46), not just that label.
+  const bool bidi_domain = utf8_domain_is_bidi(input);
+  if (bidi_domain) {
+    size_t label_start = 0;
+    while (label_start < input.size()) {
+      const size_t loc_dot = input.find('.', label_start);
+      const bool is_last_label = (loc_dot == std::string_view::npos);
+      const size_t label_size =
+          is_last_label ? input.size() - label_start : loc_dot - label_start;
+      const std::string_view label = input.substr(label_start, label_size);
+      if (!label.empty() && is_ascii(label) && !label.starts_with("xn--") &&
+          ascii_label_fails_bidi_domain(label)) {
+        output.assign(input);
+        return true;
+      }
+      if (is_last_label) {
+        break;
+      }
+      label_start += label_size + 1;
+    }
   }
   output.reserve(input.size());
 
@@ -50,7 +118,7 @@ namespace ada::idna {
             accept_decoded = false;
           } else if (!ada::idna::normalize(post_map) ||
                      post_map != tmp_buffer || post_map.empty() ||
-                     !ada::idna::is_label_valid(post_map)) {
+                     !check_label(post_map, bidi_domain)) {
             accept_decoded = false;
           }
         }

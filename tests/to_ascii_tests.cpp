@@ -218,9 +218,9 @@ TEST(to_ascii_tests, contextj_joiner_does_not_bypass_bidi) {
 }
 
 TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
-  // Ported from ada-url/ada#1276. A virama before a joiner settles only that
-  // joiner: later joiners in the label still need their own ContextJ check,
-  // and the RFC 5893 Bidi rule must still run on the label.
+  // Ported from ada-url/ada#1276 and ada-url/ada#1277. A virama before a joiner
+  // settles only that joiner: later joiners in the label still need their own
+  // ContextJ check, and the RFC 5893 Bidi rule must still run on the label.
   // 'a' (L) + virama + ZWNJ + ZWJ: the ZWJ has no virama before it.
   EXPECT_TRUE(ada::idna::to_ascii("a\u094D\u200C\u200D.example").empty())
       << "a joiner after a valid virama+ZWNJ must still be checked";
@@ -232,6 +232,50 @@ TEST(to_ascii_tests, contextj_checks_every_joiner_and_bidi_rule_1) {
   EXPECT_EQ(ada::idna::to_ascii("\u0915\u094D\u200C\u0915.example"),
             "xn--11ba1ow90g.example")
       << "valid ZWNJ label must still convert";
+
+  // Regression tests from ada-url/ada#1277:
+  // 1) U+0644 U+200C U+0073 U+06EF ("\u0644\u200Cs\u06EF"):
+  //    ZWNJ is between U+0644 (LAM, D) and U+0073 ('s', U).
+  //    Before is D, but after is U (not R or D), violating ContextJ.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0644\u200Cs\u06EF").empty())
+      << "ZWNJ followed by latin 's' violates ContextJ";
+  // 2) U+0061 U+0644 U+200C U+06EF ("a\u0644\u200C\u06EF"):
+  //    Label starts with 'a' (L), but contains U+0644 (AL) and U+06EF (AL),
+  //    violating Bidi rule 5.
+  EXPECT_TRUE(ada::idna::to_ascii("a\u0644\u200C\u06EF").empty())
+      << "LTR label containing Arabic letters violates Bidi rule 5";
+  // 3) U+0627 U+0BCD U+200D ("\u0627\u0BCD\u200D"):
+  //    U+0627 (AL) + U+0BCD (TAMIL SIGN VIRAMA) + U+200D (ZWJ).
+  //    ZWJ preceded by virama satisfies ContextJ, but Bidi rule 3 requires
+  //    the RTL label to end with R, AL, EN, or AN followed by zero or more NSM.
+  //    ZWJ (U+200D) has Bidi property BN, not NSM/R/AL/EN/AN, so it violates
+  //    Bidi rule 3.
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627\u0BCD\u200D").empty())
+      << "RTL label ending with ZWJ violates Bidi rule 3";
+
+  // Hangul LV + T composition regression test from ada-url/idna#104:
+  // U+AC00 (가, LV) + U+11A8 (ᆨ, T) -> U+AC01 (각) under NFC.
+  // Must produce xn--p39a, not xn--rud7310f.
+  EXPECT_EQ(ada::idna::to_ascii("\uAC00\u11A8.example"), "xn--p39a.example");
+}
+
+TEST(to_ascii_tests, bidi_domain_checks_every_label) {
+  // RFC 5893 applies to every label of a domain that contains an RTL label,
+  // including labels that have no R, AL, or AN character of their own.
+  // ada-url/ada#1277.
+  EXPECT_TRUE(ada::idna::to_ascii("1.\u0627").empty())
+      << "EN-leading label in a Bidi domain violates rule 1";
+  EXPECT_TRUE(ada::idna::to_ascii("\u0627.1a").empty())
+      << "EN-leading label in a Bidi domain violates rule 1";
+  EXPECT_TRUE(ada::idna::to_ascii("1a.\u0627").empty());
+  // An LTR label that starts with L and ends with L or EN is allowed.
+  EXPECT_EQ(ada::idna::to_ascii("example.\u0627"), "example.xn--mgb");
+  EXPECT_EQ(ada::idna::to_ascii("a1.\u0627"), "a1.xn--mgb");
+  EXPECT_EQ(ada::idna::to_ascii("\u0627.example"), "xn--mgb.example");
+  // Not a Bidi domain, so a leading digit is fine.
+  EXPECT_EQ(ada::idna::to_ascii("1.example"), "1.example");
+  // All-ASCII input, including punycode, stays on the WHATWG fast path.
+  EXPECT_EQ(ada::idna::to_ascii("1.xn--mgb"), "1.xn--mgb");
 }
 
 TEST(to_ascii_tests, contextj_viramas_from_newer_unicode) {

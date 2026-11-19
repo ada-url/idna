@@ -19,6 +19,12 @@ namespace {
 // Raw DEFLATE of "hello" (zlib.compressobj(wbits=-15)).
 constexpr uint8_t kHelloRaw[] = {203, 72, 205, 201, 201, 7, 0};
 
+// Crafted dynamic-Huffman block whose code-length stream uses repeat symbol 18
+// three times (runs of 138, 52, 138). The running index walks 0 -> 138 -> 190
+// -> 328, past the 320-entry (288+32) code-length buffer. Must be rejected, not
+// written out of bounds.
+constexpr uint8_t kOverlongCodeLenRun[] = {5, 0, 128, 228, 127, 234, 31};
+
 }  // namespace
 
 TEST(RawInflate, FixedHuffmanHello) {
@@ -40,6 +46,14 @@ TEST(RawInflate, RejectsTinyOutputBuffer) {
   uint8_t out[2]{};
   EXPECT_EQ(
       ada::idna::deflate::inflate_raw(kHelloRaw, sizeof(kHelloRaw), out, 2),
+      0u);
+}
+
+TEST(RawInflate, RejectsOverlongCodeLengthRun) {
+  uint8_t out[512]{};
+  EXPECT_EQ(
+      ada::idna::deflate::inflate_raw(
+          kOverlongCodeLenRun, sizeof(kOverlongCodeLenRun), out, sizeof(out)),
       0u);
 }
 

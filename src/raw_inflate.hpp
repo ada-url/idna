@@ -211,17 +211,20 @@ inline size_t inflate_raw(const uint8_t* src, size_t src_len, uint8_t* dst,
             if (rep == UINT32_MAX) return 0;
             rep += 3;
             if (i == 0) return 0;
+            if (i + rep > n) return 0;
             uint8_t v = lens[i - 1];
             while (rep--) lens[i++] = v;
           } else if (sym == 17) {
             uint32_t rep = br.get(3);
             if (rep == UINT32_MAX) return 0;
             rep += 3;
+            if (i + rep > n) return 0;
             while (rep--) lens[i++] = 0;
           } else if (sym == 18) {
             uint32_t rep = br.get(7);
             if (rep == UINT32_MAX) return 0;
             rep += 11;
+            if (i + rep > n) return 0;
             while (rep--) lens[i++] = 0;
           } else
             return 0;

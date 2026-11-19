@@ -6,7 +6,9 @@ on:
 jobs:
   build:
     name: Build on Alpine ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    # setup-alpine runs `sudo -E`, which the sudo on ubuntu-26.04 ignores, so
+    # its INPUT_* variables are lost (jirutka/setup-alpine#39).
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         arch:
